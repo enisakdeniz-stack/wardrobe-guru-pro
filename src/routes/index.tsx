@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Shirt, Sparkles, Plus, Trash2, Upload, Loader2 } from "lucide-react";
+import { Shirt, Sparkles, Trash2, Upload, Loader2, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +11,7 @@ import { Toaster } from "@/components/ui/sonner";
 import {
   addItem,
   currentSeason,
-  generateOutfits,
+  generateOutfitsFor,
   labelCategory,
   labelMode,
   labelSeason,
@@ -72,6 +72,9 @@ function Home() {
   const [colorMode, setColorMode] = useState<ColorMode>("contrast");
   const [styleFilter, setStyleFilter] = useState<Style | "any">("any");
   const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [seedId, setSeedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
+
 
   useEffect(() => {
     setItems(loadItems());
@@ -117,21 +120,37 @@ function Home() {
   }
 
   function handleDelete(id: string) {
-    setItems(removeItem(id));
+    const next = removeItem(id);
+    setItems(next);
+    if (seedId === id) setSeedId(null);
+    setOutfits([]);
     toast("Silindi");
   }
 
+  function startCombineWith(item: ClothingItem) {
+    setSeedId(item.id);
+    setTab("outfits");
+    const result = generateOutfitsFor(item, loadItems(), { season, colorMode, style: styleFilter, count: 3 });
+    setOutfits(result);
+    if (result.length === 0) {
+      toast.error("Bu parçayla uygun kombin bulunamadı. Dolaba daha çok parça ekle veya filtreyi yumuşat.");
+    }
+  }
+
   function handleGenerate() {
-    if (items.length < 2) {
-      toast.error("En az 2 kıyafet ekle");
+    const seed = items.find((i) => i.id === seedId);
+    if (!seed) {
+      toast.error("Önce dolabından bir parça seç");
+      setTab("wardrobe");
       return;
     }
-    const result = generateOutfits(items, { season, colorMode, style: styleFilter, count: 4 });
+    const result = generateOutfitsFor(seed, items, { season, colorMode, style: styleFilter, count: 3 });
+    setOutfits(result);
     if (result.length === 0) {
       toast.error("Bu kriterlere uygun kombin bulunamadı. Filtreyi yumuşat.");
     }
-    setOutfits(result);
   }
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -149,66 +168,98 @@ function Home() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Tabs defaultValue="outfits">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "outfits" | "wardrobe")}>
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="outfits"><Sparkles className="size-4 mr-2" />Kombin Üret</TabsTrigger>
             <TabsTrigger value="wardrobe"><Shirt className="size-4 mr-2" />Dolabım ({items.length})</TabsTrigger>
+            <TabsTrigger value="outfits"><Sparkles className="size-4 mr-2" />Kombinler</TabsTrigger>
           </TabsList>
 
+
           <TabsContent value="outfits" className="mt-4 space-y-4">
-            <Card>
-              <CardContent className="pt-6 grid gap-3 sm:grid-cols-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Mevsim</label>
-                  <Select value={season} onValueChange={(v) => setSeason(v as Season)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="spring">İlkbahar</SelectItem>
-                      <SelectItem value="summer">Yaz</SelectItem>
-                      <SelectItem value="fall">Sonbahar</SelectItem>
-                      <SelectItem value="winter">Kış</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Renk uyumu</label>
-                  <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="contrast">Kontrast</SelectItem>
-                      <SelectItem value="analogous">Yakın renkler</SelectItem>
-                      <SelectItem value="monochrome">Tek renk</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Stil</label>
-                  <Select value={styleFilter} onValueChange={(v) => setStyleFilter(v as Style | "any")}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Hepsi</SelectItem>
-                      <SelectItem value="casual">Günlük</SelectItem>
-                      <SelectItem value="formal">Resmi</SelectItem>
-                      <SelectItem value="sport">Spor</SelectItem>
-                      <SelectItem value="elegant">Şık</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button className="w-full" onClick={handleGenerate}>
-                    <Sparkles className="size-4 mr-2" /> Kombin üret
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {(() => {
+              const seed = items.find((i) => i.id === seedId);
+              if (!seed) {
+                return (
+                  <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                    Dolabından bir parça seç, ona göre 2-3 kombin üretelim.
+                    <div className="mt-4">
+                      <Button variant="outline" onClick={() => setTab("wardrobe")}>
+                        Dolabıma git
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <img src={seed.imageDataUrl} alt={seed.name} className="size-16 rounded-lg object-cover border border-border" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground">Seçili parça</p>
+                        <p className="font-medium truncate">{seed.name}</p>
+                        <p className="text-xs text-muted-foreground">{labelCategory(seed.category)} · {seed.colorName}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => { setSeedId(null); setOutfits([]); }} aria-label="Temizle">
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-4 mt-4">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Mevsim</label>
+                        <Select value={season} onValueChange={(v) => setSeason(v as Season)}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="spring">İlkbahar</SelectItem>
+                            <SelectItem value="summer">Yaz</SelectItem>
+                            <SelectItem value="fall">Sonbahar</SelectItem>
+                            <SelectItem value="winter">Kış</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Renk uyumu</label>
+                        <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="contrast">Kontrast</SelectItem>
+                            <SelectItem value="analogous">Yakın renkler</SelectItem>
+                            <SelectItem value="monochrome">Tek renk</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Stil</label>
+                        <Select value={styleFilter} onValueChange={(v) => setStyleFilter(v as Style | "any")}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Hepsi</SelectItem>
+                            <SelectItem value="casual">Günlük</SelectItem>
+                            <SelectItem value="formal">Resmi</SelectItem>
+                            <SelectItem value="sport">Spor</SelectItem>
+                            <SelectItem value="elegant">Şık</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button className="w-full" onClick={handleGenerate}>
+                          <Sparkles className="size-4 mr-2" /> Yeniden üret
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {outfits.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                {items.length < 2
-                  ? "Önce dolabına en az 2 kıyafet ekle, sonra kombin üret."
-                  : `${labelSeason(season)} için ${labelMode(colorMode)} kombinler oluşturmak için butona bas.`}
-              </div>
+              seedId && (
+                <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                  Bu parçayla uygun kombin bulunamadı. Dolaba parça ekle veya filtreyi yumuşat.
+                </div>
+              )
             ) : (
+
               <div className="grid gap-4 sm:grid-cols-2">
                 {outfits.map((o) => (
                   <Card key={o.id}>
@@ -274,7 +325,7 @@ function Home() {
 
             {items.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                <Plus className="size-6 mx-auto mb-2 opacity-50" />
+                <Shirt className="size-6 mx-auto mb-2 opacity-50" />
                 Henüz kıyafet eklemedin.
               </div>
             ) : (
@@ -295,23 +346,29 @@ function Home() {
                         style={{ backgroundColor: it.primaryColor }}
                       />
                     </div>
-                    <CardContent className="p-3">
-                      <p className="text-sm font-medium truncate">{it.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {labelCategory(it.category)} · {labelStyle(it.style)}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1">
+                    <CardContent className="p-3 space-y-2">
+                      <div>
+                        <p className="text-sm font-medium truncate">{it.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {labelCategory(it.category)} · {labelStyle(it.style)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
                         {it.seasons.map((s) => (
                           <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">
                             {labelSeason(s)}
                           </Badge>
                         ))}
                       </div>
+                      <Button size="sm" className="w-full" onClick={() => startCombineWith(it)}>
+                        <Wand2 className="size-3.5 mr-1.5" /> Kombin üret
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             )}
+
           </TabsContent>
         </Tabs>
       </main>

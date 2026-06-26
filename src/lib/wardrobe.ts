@@ -123,71 +123,98 @@ function pickBest<T>(arr: T[], score: (x: T) => number, k: number): T[] {
     .map((p) => p.x);
 }
 
-export function generateOutfits(items: ClothingItem[], opts: GenerateOptions): Outfit[] {
-  const { season, colorMode, style = "any", count = 4 } = opts;
-  const seasonal = items.filter(
-    (i) => i.seasons.includes(season) && (style === "any" || i.style === style),
+// Build outfits seeded by a specific item the user selected.
+export function generateOutfitsFor(
+  seed: ClothingItem,
+  items: ClothingItem[],
+  opts: GenerateOptions,
+): Outfit[] {
+  const { season, colorMode, style = "any", count = 3 } = opts;
+
+  const pool = items.filter(
+    (i) =>
+      i.id !== seed.id &&
+      i.seasons.includes(season) &&
+      (style === "any" || i.style === style),
   );
 
-  const tops = seasonal.filter((i) => i.category === "top");
-  const bottoms = seasonal.filter((i) => i.category === "bottom");
-  const dresses = seasonal.filter((i) => i.category === "dress");
-  const outerwear = seasonal.filter((i) => i.category === "outerwear");
-  const shoes = seasonal.filter((i) => i.category === "shoes");
-  const accessories = seasonal.filter((i) => i.category === "accessory");
+  const byCat = (c: Category) => pool.filter((i) => i.category === c);
+  const tops = byCat("top");
+  const bottoms = byCat("bottom");
+  const dresses = byCat("dress");
+  const outerwear = byCat("outerwear");
+  const shoes = byCat("shoes");
+  const accessories = byCat("accessory");
 
+  const needOuter = season === "winter" || season === "fall";
+
+  // What other slots does the seed need to complete an outfit?
+  function buildSlots(): Category[][] {
+    switch (seed.category) {
+      case "top":
+        return [["bottom", "shoes"], ["bottom", "shoes", "accessory"], needOuter ? ["bottom", "shoes", "outerwear"] : ["bottom", "shoes", "accessory"]];
+      case "bottom":
+        return [["top", "shoes"], ["top", "shoes", "accessory"], needOuter ? ["top", "shoes", "outerwear"] : ["top", "shoes", "accessory"]];
+      case "dress":
+        return [["shoes"], ["shoes", "accessory"], needOuter ? ["shoes", "outerwear"] : ["shoes", "accessory"]];
+      case "outerwear":
+        return [["top", "bottom", "shoes"], dresses.length ? ["dress", "shoes"] : ["top", "bottom", "shoes", "accessory"], ["top", "bottom", "shoes", "accessory"]];
+      case "shoes":
+        return [["top", "bottom"], dresses.length ? ["dress"] : ["top", "bottom", "accessory"], ["top", "bottom", "accessory"]];
+      case "accessory":
+        return [["top", "bottom", "shoes"], dresses.length ? ["dress", "shoes"] : ["top", "bottom", "shoes"], needOuter ? ["top", "bottom", "shoes", "outerwear"] : ["top", "bottom", "shoes"]];
+    }
+  }
+
+  const slotSets = buildSlots();
   const outfits: Outfit[] = [];
   const seen = new Set<string>();
+  const buildKey = (its: ClothingItem[]) => its.map((i) => i.id).sort().join("-");
 
-  const buildKey = (its: ClothingItem[]) =>
-    its
-      .map((i) => i.id)
-      .sort()
-      .join("-");
+  // Score a candidate against the seed
+  const scoreVs = (c: ClothingItem) =>
+    colorScore(seed.primaryColor, c.primaryColor, colorMode);
 
-  // Combo 1: dress-based
-  for (const dress of pickBest(dresses, () => 1, Math.min(2, dresses.length))) {
-    const shoe = pickBest(shoes, (s) => colorScore(dress.primaryColor, s.primaryColor, colorMode), 1)[0];
-    const outer = season === "winter" || season === "fall"
-      ? pickBest(outerwear, (o) => colorScore(dress.primaryColor, o.primaryColor, colorMode), 1)[0]
-      : undefined;
-    const acc = pickBest(accessories, (a) => colorScore(dress.primaryColor, a.primaryColor, colorMode), 1)[0];
-    const its = [dress, shoe, outer, acc].filter(Boolean) as ClothingItem[];
-    if (its.length < 2) continue;
-    const key = buildKey(its);
+  for (const slots of slotSets) {
+    const chosen: ClothingItem[] = [seed];
+    let ok = true;
+    for (const cat of slots) {
+      const arr =
+        cat === "top" ? tops :
+        cat === "bottom" ? bottoms :
+        cat === "dress" ? dresses :
+        cat === "outerwear" ? outerwear :
+        cat === "shoes" ? shoes : accessories;
+      if (arr.length === 0) {
+        // Optional categories: accessory/outerwear can be skipped
+        if (cat === "accessory" || cat === "outerwear") continue;
+        ok = false;
+        break;
+      }
+      // Avoid duplicates already chosen
+      const remaining = arr.filter((x) => !chosen.find((c) => c.id === x.id));
+      if (remaining.length === 0) {
+        if (cat === "accessory" || cat === "outerwear") continue;
+        ok = false;
+        break;
+      }
+      const pick = pickBest(remaining, scoreVs, 1)[0];
+      chosen.push(pick);
+    }
+    if (!ok || chosen.length < 2) continue;
+    const key = buildKey(chosen);
     if (seen.has(key)) continue;
     seen.add(key);
-    outfits.push({
-      id: crypto.randomUUID(),
-      items: its,
-      reason: `${labelMode(colorMode)} renk uyumu ile ${labelSeason(season)} elbise kombini`,
-    });
+
+    const others = chosen.filter((i) => i.id !== seed.id);
+    const reason = `${seed.colorName} ${labelCategory(seed.category).toLowerCase()} + ${others.map((o) => o.colorName).join(" · ")} (${labelMode(colorMode)})`;
+    outfits.push({ id: crypto.randomUUID(), items: chosen, reason });
+    if (outfits.length >= count) break;
   }
 
-  // Combo: top + bottom
-  for (const top of tops) {
-    if (outfits.length >= count + 3) break;
-    const bottom = pickBest(bottoms, (b) => colorScore(top.primaryColor, b.primaryColor, colorMode), 1)[0];
-    if (!bottom) continue;
-    const shoe = pickBest(shoes, (s) => (colorScore(top.primaryColor, s.primaryColor, colorMode) + colorScore(bottom.primaryColor, s.primaryColor, colorMode)) / 2, 1)[0];
-    const outer = (season === "winter" || season === "fall")
-      ? pickBest(outerwear, (o) => colorScore(top.primaryColor, o.primaryColor, colorMode), 1)[0]
-      : undefined;
-    const acc = pickBest(accessories, () => Math.random(), 1)[0];
-    const its = [top, bottom, outer, shoe, acc].filter(Boolean) as ClothingItem[];
-    if (its.length < 2) continue;
-    const key = buildKey(its);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    outfits.push({
-      id: crypto.randomUUID(),
-      items: its,
-      reason: `${top.colorName} + ${bottom.colorName} (${labelMode(colorMode)})`,
-    });
-  }
-
-  return outfits.slice(0, count);
+  return outfits;
 }
+
 
 export function labelMode(m: ColorMode): string {
   return m === "contrast" ? "kontrast" : m === "analogous" ? "yakın renk" : "tek renk";
