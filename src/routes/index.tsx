@@ -72,6 +72,9 @@ function Home() {
   const [colorMode, setColorMode] = useState<ColorMode>("contrast");
   const [styleFilter, setStyleFilter] = useState<Style | "any">("any");
   const [outfits, setOutfits] = useState<Outfit[]>([]);
+  const [seedId, setSeedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
+
 
   useEffect(() => {
     setItems(loadItems());
@@ -117,21 +120,37 @@ function Home() {
   }
 
   function handleDelete(id: string) {
-    setItems(removeItem(id));
+    const next = removeItem(id);
+    setItems(next);
+    if (seedId === id) setSeedId(null);
+    setOutfits([]);
     toast("Silindi");
   }
 
+  function startCombineWith(item: ClothingItem) {
+    setSeedId(item.id);
+    setTab("outfits");
+    const result = generateOutfitsFor(item, loadItems(), { season, colorMode, style: styleFilter, count: 3 });
+    setOutfits(result);
+    if (result.length === 0) {
+      toast.error("Bu parçayla uygun kombin bulunamadı. Dolaba daha çok parça ekle veya filtreyi yumuşat.");
+    }
+  }
+
   function handleGenerate() {
-    if (items.length < 2) {
-      toast.error("En az 2 kıyafet ekle");
+    const seed = items.find((i) => i.id === seedId);
+    if (!seed) {
+      toast.error("Önce dolabından bir parça seç");
+      setTab("wardrobe");
       return;
     }
-    const result = generateOutfits(items, { season, colorMode, style: styleFilter, count: 4 });
+    const result = generateOutfitsFor(seed, items, { season, colorMode, style: styleFilter, count: 3 });
+    setOutfits(result);
     if (result.length === 0) {
       toast.error("Bu kriterlere uygun kombin bulunamadı. Filtreyi yumuşat.");
     }
-    setOutfits(result);
   }
+
 
   return (
     <div className="min-h-screen bg-background">
