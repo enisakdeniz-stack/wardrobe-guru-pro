@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Shirt, Sparkles, Plus, Trash2, Upload, Loader2 } from "lucide-react";
+import { Shirt, Sparkles, Trash2, Upload, Loader2, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +11,7 @@ import { Toaster } from "@/components/ui/sonner";
 import {
   addItem,
   currentSeason,
-  generateOutfits,
+  generateOutfitsFor,
   labelCategory,
   labelMode,
   labelSeason,
