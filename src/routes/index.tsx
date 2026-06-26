@@ -168,66 +168,98 @@ function Home() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
-        <Tabs defaultValue="outfits">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "outfits" | "wardrobe")}>
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="outfits"><Sparkles className="size-4 mr-2" />Kombin Üret</TabsTrigger>
             <TabsTrigger value="wardrobe"><Shirt className="size-4 mr-2" />Dolabım ({items.length})</TabsTrigger>
+            <TabsTrigger value="outfits"><Sparkles className="size-4 mr-2" />Kombinler</TabsTrigger>
           </TabsList>
 
+
           <TabsContent value="outfits" className="mt-4 space-y-4">
-            <Card>
-              <CardContent className="pt-6 grid gap-3 sm:grid-cols-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Mevsim</label>
-                  <Select value={season} onValueChange={(v) => setSeason(v as Season)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="spring">İlkbahar</SelectItem>
-                      <SelectItem value="summer">Yaz</SelectItem>
-                      <SelectItem value="fall">Sonbahar</SelectItem>
-                      <SelectItem value="winter">Kış</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Renk uyumu</label>
-                  <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="contrast">Kontrast</SelectItem>
-                      <SelectItem value="analogous">Yakın renkler</SelectItem>
-                      <SelectItem value="monochrome">Tek renk</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Stil</label>
-                  <Select value={styleFilter} onValueChange={(v) => setStyleFilter(v as Style | "any")}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="any">Hepsi</SelectItem>
-                      <SelectItem value="casual">Günlük</SelectItem>
-                      <SelectItem value="formal">Resmi</SelectItem>
-                      <SelectItem value="sport">Spor</SelectItem>
-                      <SelectItem value="elegant">Şık</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-end">
-                  <Button className="w-full" onClick={handleGenerate}>
-                    <Sparkles className="size-4 mr-2" /> Kombin üret
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {(() => {
+              const seed = items.find((i) => i.id === seedId);
+              if (!seed) {
+                return (
+                  <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                    Dolabından bir parça seç, ona göre 2-3 kombin üretelim.
+                    <div className="mt-4">
+                      <Button variant="outline" onClick={() => setTab("wardrobe")}>
+                        Dolabıma git
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3">
+                      <img src={seed.imageDataUrl} alt={seed.name} className="size-16 rounded-lg object-cover border border-border" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-muted-foreground">Seçili parça</p>
+                        <p className="font-medium truncate">{seed.name}</p>
+                        <p className="text-xs text-muted-foreground">{labelCategory(seed.category)} · {seed.colorName}</p>
+                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => { setSeedId(null); setOutfits([]); }} aria-label="Temizle">
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-4 mt-4">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Mevsim</label>
+                        <Select value={season} onValueChange={(v) => setSeason(v as Season)}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="spring">İlkbahar</SelectItem>
+                            <SelectItem value="summer">Yaz</SelectItem>
+                            <SelectItem value="fall">Sonbahar</SelectItem>
+                            <SelectItem value="winter">Kış</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Renk uyumu</label>
+                        <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="contrast">Kontrast</SelectItem>
+                            <SelectItem value="analogous">Yakın renkler</SelectItem>
+                            <SelectItem value="monochrome">Tek renk</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Stil</label>
+                        <Select value={styleFilter} onValueChange={(v) => setStyleFilter(v as Style | "any")}>
+                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="any">Hepsi</SelectItem>
+                            <SelectItem value="casual">Günlük</SelectItem>
+                            <SelectItem value="formal">Resmi</SelectItem>
+                            <SelectItem value="sport">Spor</SelectItem>
+                            <SelectItem value="elegant">Şık</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button className="w-full" onClick={handleGenerate}>
+                          <Sparkles className="size-4 mr-2" /> Yeniden üret
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             {outfits.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                {items.length < 2
-                  ? "Önce dolabına en az 2 kıyafet ekle, sonra kombin üret."
-                  : `${labelSeason(season)} için ${labelMode(colorMode)} kombinler oluşturmak için butona bas.`}
-              </div>
+              seedId && (
+                <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                  Bu parçayla uygun kombin bulunamadı. Dolaba parça ekle veya filtreyi yumuşat.
+                </div>
+              )
             ) : (
+
               <div className="grid gap-4 sm:grid-cols-2">
                 {outfits.map((o) => (
                   <Card key={o.id}>
