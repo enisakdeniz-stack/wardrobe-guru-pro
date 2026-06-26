@@ -1,29 +1,320 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Shirt, Sparkles, Plus, Trash2, Upload, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Toaster } from "@/components/ui/sonner";
+import {
+  addItem,
+  currentSeason,
+  generateOutfits,
+  labelCategory,
+  labelMode,
+  labelSeason,
+  labelStyle,
+  loadItems,
+  removeItem,
+  type ClothingItem,
+  type ColorMode,
+  type Outfit,
+  type Season,
+  type Style,
+} from "@/lib/wardrobe";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Your App" },
-      { name: "description", content: "Replace this with a one-sentence description of your app." },
-      { property: "og:title", content: "Your App" },
-      { property: "og:description", content: "Replace this with a one-sentence description of your app." },
+      { title: "Dolabım — AI Kombin Asistanı" },
+      { name: "description", content: "Dolabındaki kıyafetleri ekle, AI mevsime ve renk uyumuna göre kombin önersin." },
     ],
   }),
-  component: Index,
+  component: Home,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Downscale to keep payload reasonable
+async function downscaleImage(dataUrl: string, maxSize = 768): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx?.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.src = dataUrl;
+  });
+}
+
+function Home() {
+  const [items, setItems] = useState<ClothingItem[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const [season, setSeason] = useState<Season>(currentSeason());
+  const [colorMode, setColorMode] = useState<ColorMode>("contrast");
+  const [styleFilter, setStyleFilter] = useState<Style | "any">("any");
+  const [outfits, setOutfits] = useState<Outfit[]>([]);
+
+  useEffect(() => {
+    setItems(loadItems());
+  }, []);
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setAnalyzing(true);
+    try {
+      for (const file of Array.from(files)) {
+        const raw = await fileToDataUrl(file);
+        const small = await downscaleImage(raw);
+        const res = await fetch("/api/analyze-clothing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl: small }),
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          toast.error(`Analiz başarısız: ${txt.slice(0, 120)}`);
+          continue;
+        }
+        const data = await res.json();
+        const item: ClothingItem = {
+          id: crypto.randomUUID(),
+          name: data.name ?? "Kıyafet",
+          category: data.category ?? "top",
+          primaryColor: data.primaryColor ?? "#888888",
+          colorName: data.colorName ?? "renk",
+          seasons: data.seasons?.length ? data.seasons : ["spring", "summer", "fall", "winter"],
+          style: data.style ?? "casual",
+          imageDataUrl: small,
+          createdAt: Date.now(),
+        };
+        const next = addItem(item);
+        setItems(next);
+        toast.success(`Eklendi: ${item.name}`);
+      }
+    } finally {
+      setAnalyzing(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  function handleDelete(id: string) {
+    setItems(removeItem(id));
+    toast("Silindi");
+  }
+
+  function handleGenerate() {
+    if (items.length < 2) {
+      toast.error("En az 2 kıyafet ekle");
+      return;
+    }
+    const result = generateOutfits(items, { season, colorMode, style: styleFilter, count: 4 });
+    if (result.length === 0) {
+      toast.error("Bu kriterlere uygun kombin bulunamadı. Filtreyi yumuşat.");
+    }
+    setOutfits(result);
+  }
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
+    <div className="min-h-screen bg-background">
+      <Toaster richColors position="top-center" />
+      <header className="border-b border-border/60 bg-card/40 backdrop-blur sticky top-0 z-10">
+        <div className="mx-auto max-w-5xl px-4 py-4 flex items-center gap-2">
+          <div className="size-9 rounded-xl bg-primary text-primary-foreground grid place-items-center">
+            <Shirt className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">Dolabım</h1>
+            <p className="text-xs text-muted-foreground">AI destekli kombin asistanı</p>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 py-6">
+        <Tabs defaultValue="outfits">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="outfits"><Sparkles className="size-4 mr-2" />Kombin Üret</TabsTrigger>
+            <TabsTrigger value="wardrobe"><Shirt className="size-4 mr-2" />Dolabım ({items.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="outfits" className="mt-4 space-y-4">
+            <Card>
+              <CardContent className="pt-6 grid gap-3 sm:grid-cols-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Mevsim</label>
+                  <Select value={season} onValueChange={(v) => setSeason(v as Season)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="spring">İlkbahar</SelectItem>
+                      <SelectItem value="summer">Yaz</SelectItem>
+                      <SelectItem value="fall">Sonbahar</SelectItem>
+                      <SelectItem value="winter">Kış</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Renk uyumu</label>
+                  <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="contrast">Kontrast</SelectItem>
+                      <SelectItem value="analogous">Yakın renkler</SelectItem>
+                      <SelectItem value="monochrome">Tek renk</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Stil</label>
+                  <Select value={styleFilter} onValueChange={(v) => setStyleFilter(v as Style | "any")}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Hepsi</SelectItem>
+                      <SelectItem value="casual">Günlük</SelectItem>
+                      <SelectItem value="formal">Resmi</SelectItem>
+                      <SelectItem value="sport">Spor</SelectItem>
+                      <SelectItem value="elegant">Şık</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-end">
+                  <Button className="w-full" onClick={handleGenerate}>
+                    <Sparkles className="size-4 mr-2" /> Kombin üret
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {outfits.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                {items.length < 2
+                  ? "Önce dolabına en az 2 kıyafet ekle, sonra kombin üret."
+                  : `${labelSeason(season)} için ${labelMode(colorMode)} kombinler oluşturmak için butona bas.`}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {outfits.map((o) => (
+                  <Card key={o.id}>
+                    <CardContent className="pt-6">
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {o.items.map((it) => (
+                          <div key={it.id} className="relative">
+                            <img
+                              src={it.imageDataUrl}
+                              alt={it.name}
+                              className="size-20 rounded-lg object-cover border border-border"
+                            />
+                            <span
+                              className="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-background"
+                              style={{ backgroundColor: it.primaryColor }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-sm font-medium">{o.reason}</p>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {o.items.map((it) => (
+                          <Badge key={it.id} variant="secondary" className="text-xs">
+                            {labelCategory(it.category)}: {it.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="wardrobe" className="mt-4 space-y-4">
+            <Card>
+              <CardContent className="pt-6">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
+                <Button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={analyzing}
+                  className="w-full"
+                  size="lg"
+                >
+                  {analyzing ? (
+                    <><Loader2 className="size-4 mr-2 animate-spin" /> AI analiz ediyor...</>
+                  ) : (
+                    <><Upload className="size-4 mr-2" /> Kıyafet fotoğrafı ekle</>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  AI fotoğraftan türü, rengini ve mevsimi otomatik tespit eder.
+                </p>
+              </CardContent>
+            </Card>
+
+            {items.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                <Plus className="size-6 mx-auto mb-2 opacity-50" />
+                Henüz kıyafet eklemedin.
+              </div>
+            ) : (
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
+                {items.map((it) => (
+                  <Card key={it.id} className="overflow-hidden group">
+                    <div className="relative aspect-square">
+                      <img src={it.imageDataUrl} alt={it.name} className="size-full object-cover" />
+                      <button
+                        onClick={() => handleDelete(it.id)}
+                        className="absolute top-2 right-2 size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center opacity-0 group-hover:opacity-100 transition hover:bg-destructive hover:text-destructive-foreground"
+                        aria-label="Sil"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                      <span
+                        className="absolute bottom-2 left-2 size-5 rounded-full border-2 border-background shadow"
+                        style={{ backgroundColor: it.primaryColor }}
+                      />
+                    </div>
+                    <CardContent className="p-3">
+                      <p className="text-sm font-medium truncate">{it.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {labelCategory(it.category)} · {labelStyle(it.style)}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {it.seasons.map((s) => (
+                          <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">
+                            {labelSeason(s)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </main>
     </div>
   );
 }
