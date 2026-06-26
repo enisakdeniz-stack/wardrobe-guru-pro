@@ -325,7 +325,7 @@ function Home() {
 
             {items.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                <Plus className="size-6 mx-auto mb-2 opacity-50" />
+                <Shirt className="size-6 mx-auto mb-2 opacity-50" />
                 Henüz kıyafet eklemedin.
               </div>
             ) : (
@@ -346,23 +346,29 @@ function Home() {
                         style={{ backgroundColor: it.primaryColor }}
                       />
                     </div>
-                    <CardContent className="p-3">
-                      <p className="text-sm font-medium truncate">{it.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {labelCategory(it.category)} · {labelStyle(it.style)}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap gap-1">
+                    <CardContent className="p-3 space-y-2">
+                      <div>
+                        <p className="text-sm font-medium truncate">{it.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {labelCategory(it.category)} · {labelStyle(it.style)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
                         {it.seasons.map((s) => (
                           <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">
                             {labelSeason(s)}
                           </Badge>
                         ))}
                       </div>
+                      <Button size="sm" className="w-full" onClick={() => startCombineWith(it)}>
+                        <Wand2 className="size-3.5 mr-1.5" /> Kombin üret
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
               </div>
             )}
+
           </TabsContent>
         </Tabs>
       </main>
