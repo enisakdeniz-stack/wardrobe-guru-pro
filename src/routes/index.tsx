@@ -80,39 +80,66 @@ function Home() {
     setItems(loadItems());
   }, []);
 
+  async function analyzeOne(small: string, attempt = 0): Promise<Response> {
+    const res = await fetch("/api/analyze-clothing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageDataUrl: small }),
+    });
+    if ((res.status === 429 || res.status === 503) && attempt < 4) {
+      const wait = 1500 * Math.pow(2, attempt);
+      await new Promise((r) => setTimeout(r, wait));
+      return analyzeOne(small, attempt + 1);
+    }
+    return res;
+  }
+
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setAnalyzing(true);
+    const arr = Array.from(files);
+    let ok = 0;
+    let fail = 0;
+    const tId = toast.loading(`0/${arr.length} analiz ediliyor...`);
     try {
-      for (const file of Array.from(files)) {
-        const raw = await fileToDataUrl(file);
-        const small = await downscaleImage(raw);
-        const res = await fetch("/api/analyze-clothing", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl: small }),
-        });
-        if (!res.ok) {
-          const txt = await res.text();
-          toast.error(`Analiz başarısız: ${txt.slice(0, 120)}`);
-          continue;
+      for (let i = 0; i < arr.length; i++) {
+        const file = arr[i];
+        toast.loading(`${i + 1}/${arr.length} analiz ediliyor: ${file.name}`, { id: tId });
+        try {
+          const raw = await fileToDataUrl(file);
+          const small = await downscaleImage(raw);
+          const res = await analyzeOne(small);
+          if (!res.ok) {
+            const txt = await res.text();
+            fail++;
+            toast.error(`${file.name}: ${txt.slice(0, 100)}`);
+            // pause briefly so we don't hammer the gateway
+            await new Promise((r) => setTimeout(r, 800));
+            continue;
+          }
+          const data = await res.json();
+          const item: ClothingItem = {
+            id: crypto.randomUUID(),
+            name: data.name ?? "Kıyafet",
+            category: data.category ?? "top",
+            primaryColor: data.primaryColor ?? "#888888",
+            colorName: data.colorName ?? "renk",
+            seasons: data.seasons?.length ? data.seasons : ["spring", "summer", "fall", "winter"],
+            style: data.style ?? "casual",
+            imageDataUrl: small,
+            createdAt: Date.now(),
+          };
+          const next = addItem(item);
+          setItems(next);
+          ok++;
+          // small delay between successful calls to respect rate limits
+          if (i < arr.length - 1) await new Promise((r) => setTimeout(r, 350));
+        } catch (e) {
+          fail++;
+          toast.error(`${file.name}: ${(e as Error).message}`);
         }
-        const data = await res.json();
-        const item: ClothingItem = {
-          id: crypto.randomUUID(),
-          name: data.name ?? "Kıyafet",
-          category: data.category ?? "top",
-          primaryColor: data.primaryColor ?? "#888888",
-          colorName: data.colorName ?? "renk",
-          seasons: data.seasons?.length ? data.seasons : ["spring", "summer", "fall", "winter"],
-          style: data.style ?? "casual",
-          imageDataUrl: small,
-          createdAt: Date.now(),
-        };
-        const next = addItem(item);
-        setItems(next);
-        toast.success(`Eklendi: ${item.name}`);
       }
+      toast.success(`${ok} eklendi${fail ? `, ${fail} başarısız` : ""}`, { id: tId });
     } finally {
       setAnalyzing(false);
       if (fileRef.current) fileRef.current.value = "";
