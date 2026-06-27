@@ -224,7 +224,7 @@ export function generateOutfitsFor(
       // Avoid duplicates already chosen
       const remaining = arr.filter((x) => !chosen.find((c) => c.id === x.id));
       if (remaining.length === 0) {
-        if (cat === "accessory" || cat === "outerwear") continue;
+        if (cat === "accessory" || cat === "outerwear" || cat === "shoes") continue;
         ok = false;
         break;
       }
