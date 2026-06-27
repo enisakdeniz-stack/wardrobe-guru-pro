@@ -216,8 +216,8 @@ export function generateOutfitsFor(
         cat === "outerwear" ? outerwear :
         cat === "shoes" ? shoes : accessories;
       if (arr.length === 0) {
-        // Optional categories: accessory/outerwear can be skipped
-        if (cat === "accessory" || cat === "outerwear") continue;
+        // Only the core complement (top/bottom/dress) is required; others optional.
+        if (cat === "accessory" || cat === "outerwear" || cat === "shoes") continue;
         ok = false;
         break;
       }
