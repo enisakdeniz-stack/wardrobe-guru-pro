@@ -77,7 +77,7 @@ function Home() {
 
 
   useEffect(() => {
-    setItems(loadItems());
+    loadItemsAsync().then(setItems);
   }, []);
 
   async function analyzeOne(small: string, attempt = 0): Promise<Response> {
