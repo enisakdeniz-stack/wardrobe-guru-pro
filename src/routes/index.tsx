@@ -129,7 +129,7 @@ function Home() {
             imageDataUrl: small,
             createdAt: Date.now(),
           };
-          const next = addItem(item);
+          const next = await addItem(item);
           setItems(next);
           ok++;
           // small delay between successful calls to respect rate limits
