@@ -17,6 +17,7 @@ import {
   labelSeason,
   labelStyle,
   loadItems,
+  loadItemsAsync,
   removeItem,
   type ClothingItem,
   type ColorMode,
@@ -77,7 +78,7 @@ function Home() {
 
 
   useEffect(() => {
-    setItems(loadItems());
+    loadItemsAsync().then(setItems);
   }, []);
 
   async function analyzeOne(small: string, attempt = 0): Promise<Response> {
@@ -129,7 +130,7 @@ function Home() {
             imageDataUrl: small,
             createdAt: Date.now(),
           };
-          const next = addItem(item);
+          const next = await addItem(item);
           setItems(next);
           ok++;
           // small delay between successful calls to respect rate limits
@@ -146,8 +147,8 @@ function Home() {
     }
   }
 
-  function handleDelete(id: string) {
-    const next = removeItem(id);
+  async function handleDelete(id: string) {
+    const next = await removeItem(id);
     setItems(next);
     if (seedId === id) setSeedId(null);
     setOutfits([]);
