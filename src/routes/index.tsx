@@ -17,6 +17,7 @@ import {
   labelSeason,
   labelStyle,
   loadItems,
+  loadItemsAsync,
   removeItem,
   type ClothingItem,
   type ColorMode,
