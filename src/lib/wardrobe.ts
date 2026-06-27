@@ -216,15 +216,15 @@ export function generateOutfitsFor(
         cat === "outerwear" ? outerwear :
         cat === "shoes" ? shoes : accessories;
       if (arr.length === 0) {
-        // Optional categories: accessory/outerwear can be skipped
-        if (cat === "accessory" || cat === "outerwear") continue;
+        // Only the core complement (top/bottom/dress) is required; others optional.
+        if (cat === "accessory" || cat === "outerwear" || cat === "shoes") continue;
         ok = false;
         break;
       }
       // Avoid duplicates already chosen
       const remaining = arr.filter((x) => !chosen.find((c) => c.id === x.id));
       if (remaining.length === 0) {
-        if (cat === "accessory" || cat === "outerwear") continue;
+        if (cat === "accessory" || cat === "outerwear" || cat === "shoes") continue;
         ok = false;
         break;
       }
