@@ -146,8 +146,8 @@ function Home() {
     }
   }
 
-  function handleDelete(id: string) {
-    const next = removeItem(id);
+  async function handleDelete(id: string) {
+    const next = await removeItem(id);
     setItems(next);
     if (seedId === id) setSeedId(null);
     setOutfits([]);
