@@ -21,32 +21,62 @@ export interface Outfit {
   reason: string;
 }
 
+import { get, set } from "idb-keyval";
+
 const STORAGE_KEY = "wardrobe.items.v1";
+const IDB_KEY = "wardrobe.items.v2";
+
+let cache: ClothingItem[] | null = null;
+let loaded = false;
 
 export function loadItems(): ClothingItem[] {
+  return cache ?? [];
+}
+
+// Async loader: migrates from localStorage to IndexedDB on first run.
+export async function loadItemsAsync(): Promise<ClothingItem[]> {
+  if (loaded) return cache ?? [];
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as ClothingItem[];
+    const fromIdb = await get<ClothingItem[]>(IDB_KEY);
+    if (fromIdb && fromIdb.length) {
+      cache = fromIdb;
+    } else {
+      // migrate from localStorage if present
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        try {
+          cache = JSON.parse(raw) as ClothingItem[];
+          await set(IDB_KEY, cache);
+          window.localStorage.removeItem(STORAGE_KEY);
+        } catch {
+          cache = [];
+        }
+      } else {
+        cache = [];
+      }
+    }
   } catch {
-    return [];
+    cache = [];
   }
+  loaded = true;
+  return cache ?? [];
 }
 
-export function saveItems(items: ClothingItem[]): void {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+async function persist(items: ClothingItem[]): Promise<void> {
+  cache = items;
+  await set(IDB_KEY, items);
 }
 
-export function addItem(item: ClothingItem): ClothingItem[] {
-  const items = [item, ...loadItems()];
-  saveItems(items);
+export async function addItem(item: ClothingItem): Promise<ClothingItem[]> {
+  const items = [item, ...(cache ?? [])];
+  await persist(items);
   return items;
 }
 
-export function removeItem(id: string): ClothingItem[] {
-  const items = loadItems().filter((i) => i.id !== id);
-  saveItems(items);
+export async function removeItem(id: string): Promise<ClothingItem[]> {
+  const items = (cache ?? []).filter((i) => i.id !== id);
+  await persist(items);
   return items;
 }
 
