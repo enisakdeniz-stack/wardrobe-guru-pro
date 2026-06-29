@@ -33,6 +33,15 @@ const IDB_KEY = "wardrobe.items.v2";
 let cache: ClothingItem[] | null = null;
 let loaded = false;
 
+function normalizeItem(item: ClothingItem): ClothingItem {
+  return {
+    ...item,
+    secondaryColors: item.secondaryColors ?? [],
+    secondaryColorNames: item.secondaryColorNames ?? [],
+    pattern: item.pattern ?? "solid",
+  };
+}
+
 export function loadItems(): ClothingItem[] {
   return cache ?? [];
 }
@@ -43,24 +52,13 @@ export async function loadItemsAsync(): Promise<ClothingItem[]> {
   try {
     const fromIdb = await get<ClothingItem[]>(IDB_KEY);
     if (fromIdb && fromIdb.length) {
-      // Migrate: ensure secondaryColors fields exist on old items
-      cache = fromIdb.map((item) => ({
-        ...item,
-        secondaryColors: item.secondaryColors ?? [],
-        secondaryColorNames: item.secondaryColorNames ?? [],
-        pattern: item.pattern ?? ("solid" as Pattern),
-      }));
+      cache = fromIdb.map(normalizeItem);
     } else {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         try {
           const parsed = JSON.parse(raw) as ClothingItem[];
-          cache = parsed.map((item) => ({
-            ...item,
-            secondaryColors: item.secondaryColors ?? [],
-            secondaryColorNames: item.secondaryColorNames ?? [],
-            pattern: item.pattern ?? ("solid" as Pattern),
-          }));
+          cache = parsed.map(normalizeItem);
           await set(IDB_KEY, cache);
           window.localStorage.removeItem(STORAGE_KEY);
         } catch {
