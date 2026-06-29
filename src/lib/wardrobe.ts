@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export type Category = "top" | "bottom" | "dress" | "outerwear" | "shoes" | "accessory";
 export type Season = "spring" | "summer" | "fall" | "winter";
 export type Style = "casual" | "formal" | "sport" | "elegant";
@@ -25,32 +27,6 @@ export interface Outfit {
   reason: string;
 }
 
-const SUPABASE_URL = "https://nalzfneeucuiekwsalng.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hbHpmbmVldWN1aWVrd3NhbG5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzODMzMDMsImV4cCI6MjA5NDk1OTMwM30.znRFNkKc23sK69dN1vXn9pO2zgkzoeXXHsPdBpUBmHE";
-
-function getUserKey(): string {
-  if (typeof window === "undefined") return "default";
-  let key = window.localStorage.getItem("dolabim.user_key");
-  if (!key) {
-    key = crypto.randomUUID();
-    window.localStorage.setItem("dolabim.user_key", key);
-  }
-  return key;
-}
-
-async function supabaseFetch(path: string, options?: RequestInit) {
-  return fetch(`${SUPABASE_URL}/rest/v1${path}`, {
-    ...options,
-    headers: {
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": "return=representation",
-      ...(options?.headers ?? {}),
-    },
-  });
-}
-
 function dbToItem(row: Record<string, unknown>): ClothingItem {
   return {
     id: row.id as string,
@@ -68,10 +44,32 @@ function dbToItem(row: Record<string, unknown>): ClothingItem {
   };
 }
 
-function itemToDb(item: ClothingItem, userKey: string) {
-  return {
+let cache: ClothingItem[] | null = null;
+
+export function loadItems(): ClothingItem[] {
+  return cache ?? [];
+}
+
+export async function loadItemsAsync(): Promise<ClothingItem[]> {
+  if (cache !== null) return cache;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { cache = []; return []; }
+  const { data, error } = await supabase
+    .from("clothing_items")
+    .select("*")
+    .eq("user_key", user.id)
+    .order("created_at", { ascending: false });
+  if (error || !data) { cache = []; return []; }
+  cache = data.map(dbToItem);
+  return cache;
+}
+
+export async function addItem(item: ClothingItem): Promise<ClothingItem[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return cache ?? [];
+  await supabase.from("clothing_items").insert({
     id: item.id,
-    user_key: userKey,
+    user_key: user.id,
     name: item.name,
     category: item.category,
     sub_category: "diger",
@@ -84,47 +82,31 @@ function itemToDb(item: ClothingItem, userKey: string) {
     style: item.style,
     image_data_url: item.imageDataUrl,
     created_at: item.createdAt,
-  };
-}
-
-let cache: ClothingItem[] | null = null;
-
-export function loadItems(): ClothingItem[] {
-  return cache ?? [];
-}
-
-export async function loadItemsAsync(): Promise<ClothingItem[]> {
-  if (cache !== null) return cache;
-  const userKey = getUserKey();
-  const res = await supabaseFetch(`/clothing_items?user_key=eq.${userKey}&order=created_at.desc`);
-  if (!res.ok) { cache = []; return []; }
-  const rows = await res.json() as Record<string, unknown>[];
-  cache = rows.map(dbToItem);
-  return cache;
-}
-
-export async function addItem(item: ClothingItem): Promise<ClothingItem[]> {
-  const userKey = getUserKey();
-  await supabaseFetch("/clothing_items", {
-    method: "POST",
-    body: JSON.stringify(itemToDb(item, userKey)),
   });
   cache = [item, ...(cache ?? [])];
   return cache;
 }
 
 export async function removeItem(id: string): Promise<ClothingItem[]> {
-  await supabaseFetch(`/clothing_items?id=eq.${id}`, { method: "DELETE" });
+  await supabase.from("clothing_items").delete().eq("id", id);
   cache = (cache ?? []).filter((i) => i.id !== id);
   return cache;
 }
 
 export async function updateItem(updated: ClothingItem): Promise<ClothingItem[]> {
-  const userKey = getUserKey();
-  await supabaseFetch(`/clothing_items?id=eq.${updated.id}`, {
-    method: "PATCH",
-    body: JSON.stringify(itemToDb(updated, userKey)),
-  });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return cache ?? [];
+  await supabase.from("clothing_items").update({
+    name: updated.name,
+    category: updated.category,
+    primary_color: updated.primaryColor,
+    color_name: updated.colorName,
+    secondary_colors: updated.secondaryColors ?? [],
+    secondary_color_names: updated.secondaryColorNames ?? [],
+    pattern: updated.pattern ?? "solid",
+    seasons: updated.seasons,
+    style: updated.style,
+  }).eq("id", updated.id);
   cache = (cache ?? []).map((i) => i.id === updated.id ? updated : i);
   return cache;
 }
