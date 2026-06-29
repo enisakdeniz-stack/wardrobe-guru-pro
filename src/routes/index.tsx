@@ -593,7 +593,7 @@ function Home() {
                   <Card key={it.id} className="overflow-hidden group">
                     <div className="relative aspect-square">
                       <img src={it.imageDataUrl} alt={it.name} className="size-full object-cover" />
-                      <div className="absolute top-2 right-2 flex gap-1 opacity-100">
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
                         <button
                           onClick={() => setEditingItem(it)}
                           className="size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center hover:bg-primary hover:text-primary-foreground"
@@ -642,4 +642,3 @@ function Home() {
     </div>
   );
 }
-
