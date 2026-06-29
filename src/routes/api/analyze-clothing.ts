@@ -10,7 +10,6 @@ export const Route = createFileRoute("/api/analyze-clothing")({
         const { imageDataUrl } = (await request.json()) as { imageDataUrl: string };
         if (!imageDataUrl) return new Response("Missing image", { status: 400 });
 
-        // Extract base64 data
         const base64Match = imageDataUrl.match(/^data:(.+);base64,(.+)$/);
         if (!base64Match) return new Response("Invalid image format", { status: 400 });
         const mimeType = base64Match[1];
@@ -28,10 +27,7 @@ export const Route = createFileRoute("/api/analyze-clothing")({
   "style": "casual veya formal veya sport veya elegant",
   "pattern": "solid veya striped veya checked veya floral veya graphic veya other"
 }
-
-Kurallar:
-- Desenli kıyafetlerde tüm belirgin renkleri secondaryColors'a ekle (max 3)
-- Sadece JSON döndür, başka metin yazma`;
+Sadece JSON döndür, başka metin yazma.`;
 
         const body = {
           contents: [{
@@ -44,10 +40,13 @@ Kurallar:
         };
 
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "X-goog-api-key": key,
+            },
             body: JSON.stringify(body),
           }
         );
