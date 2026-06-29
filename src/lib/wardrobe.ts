@@ -56,10 +56,10 @@ export async function loadItemsAsync(): Promise<ClothingItem[]> {
         try {
           const parsed = JSON.parse(raw) as ClothingItem[];
           cache = parsed.map((item) => ({
-            secondaryColors: [],
-            secondaryColorNames: [],
-            pattern: "solid" as Pattern,
             ...item,
+            secondaryColors: item.secondaryColors ?? [],
+            secondaryColorNames: item.secondaryColorNames ?? [],
+            pattern: item.pattern ?? ("solid" as Pattern),
           }));
           await set(IDB_KEY, cache);
           window.localStorage.removeItem(STORAGE_KEY);
