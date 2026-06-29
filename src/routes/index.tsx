@@ -56,19 +56,26 @@ async function downscaleImage(dataUrl: string, maxSize = 768): Promise<string> {
 
 function LoginScreen() {
   const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function handleLogin() {
+  async function handleSendOtp() {
     if (!email) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email });
     setLoading(false);
     if (error) { toast.error("Hata: " + error.message); return; }
     setSent(true);
+    toast.success("Kod gönderildi!");
+  }
+
+  async function handleVerify() {
+    if (!token) return;
+    setLoading(true);
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+    setLoading(false);
+    if (error) { toast.error("Kod hatalı veya süresi dolmuş"); return; }
   }
 
   return (
@@ -83,20 +90,7 @@ function LoginScreen() {
             <p className="text-sm text-muted-foreground mt-1">AI destekli kombin asistanı</p>
           </div>
 
-          {sent ? (
-            <div className="text-center space-y-3">
-              <div className="size-12 rounded-full bg-green-100 grid place-items-center mx-auto">
-                <Mail className="size-6 text-green-600" />
-              </div>
-              <p className="font-medium">E-posta gönderildi!</p>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-medium">{email}</span> adresine giriş bağlantısı gönderdik. Gelen kutunu kontrol et.
-              </p>
-              <Button variant="outline" className="w-full" onClick={() => setSent(false)}>
-                Farklı e-posta dene
-              </Button>
-            </div>
-          ) : (
+          {!sent ? (
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium">E-posta adresi</label>
@@ -105,17 +99,45 @@ function LoginScreen() {
                   placeholder="ornek@mail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
                   className="mt-1"
                 />
               </div>
-              <Button className="w-full" onClick={handleLogin} disabled={loading || !email}>
+              <Button className="w-full" onClick={handleSendOtp} disabled={loading || !email}>
                 {loading ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Mail className="size-4 mr-2" />}
-                Giriş bağlantısı gönder
+                Kod gönder
               </Button>
               <p className="text-xs text-center text-muted-foreground">
-                Şifre yok. E-postana gelen bağlantıya tıklayarak giriş yaparsın.
+                E-postana 6 haneli giriş kodu göndereceğiz.
               </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-center">
+                <div className="size-12 rounded-full bg-green-100 grid place-items-center mx-auto mb-2">
+                  <Mail className="size-6 text-green-600" />
+                </div>
+                <p className="text-sm text-muted-foreground"><span className="font-medium">{email}</span> adresine kod gönderdik.</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">6 haneli kod</label>
+                <Input
+                  type="text"
+                  placeholder="123456"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onKeyDown={(e) => e.key === "Enter" && handleVerify()}
+                  className="mt-1 text-center text-lg tracking-widest"
+                  maxLength={6}
+                />
+              </div>
+              <Button className="w-full" onClick={handleVerify} disabled={loading || token.length !== 6}>
+                {loading ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
+                Giriş yap
+              </Button>
+              <button onClick={() => { setSent(false); setToken(""); }} className="text-xs text-center text-muted-foreground w-full hover:underline">
+                Farklı e-posta dene
+              </button>
             </div>
           )}
         </CardContent>
