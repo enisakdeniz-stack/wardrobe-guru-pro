@@ -1,27 +1,33 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Shirt, Sparkles, Trash2, Upload, Loader2, Wand2, X } from "lucide-react";
+import { Shirt, Sparkles, Trash2, Upload, Loader2, Wand2, X, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Toaster } from "@/components/ui/sonner";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   addItem,
   currentSeason,
   generateOutfitsFor,
   labelCategory,
   labelMode,
+  labelPattern,
   labelSeason,
   labelStyle,
   loadItems,
   loadItemsAsync,
   removeItem,
+  updateItem,
+  type Category,
   type ClothingItem,
   type ColorMode,
   type Outfit,
+  type Pattern,
   type Season,
   type Style,
 } from "@/lib/wardrobe";
@@ -45,7 +51,6 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-// Downscale to keep payload reasonable
 async function downscaleImage(dataUrl: string, maxSize = 768): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -64,10 +69,232 @@ async function downscaleImage(dataUrl: string, maxSize = 768): Promise<string> {
   });
 }
 
+// Edit Modal Component
+function EditModal({
+  item,
+  onSave,
+  onClose,
+}: {
+  item: ClothingItem;
+  onSave: (updated: ClothingItem) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(item.name);
+  const [category, setCategory] = useState<Category>(item.category);
+  const [style, setStyle] = useState<Style>(item.style);
+  const [pattern, setPattern] = useState<Pattern>(item.pattern ?? "solid");
+  const [seasons, setSeasons] = useState<Season[]>(item.seasons);
+  const [primaryColor, setPrimaryColor] = useState(item.primaryColor);
+  const [colorName, setColorName] = useState(item.colorName);
+  const [secondaryColors, setSecondaryColors] = useState<string[]>(item.secondaryColors ?? []);
+  const [secondaryColorNames, setSecondaryColorNames] = useState<string[]>(item.secondaryColorNames ?? []);
+
+  const allSeasons: Season[] = ["spring", "summer", "fall", "winter"];
+
+  function toggleSeason(s: Season) {
+    setSeasons((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    );
+  }
+
+  function updateSecondaryColor(index: number, color: string) {
+    const updated = [...secondaryColors];
+    updated[index] = color;
+    setSecondaryColors(updated);
+  }
+
+  function updateSecondaryColorName(index: number, name: string) {
+    const updated = [...secondaryColorNames];
+    updated[index] = name;
+    setSecondaryColorNames(updated);
+  }
+
+  function addSecondaryColor() {
+    if (secondaryColors.length >= 3) return;
+    setSecondaryColors([...secondaryColors, "#888888"]);
+    setSecondaryColorNames([...secondaryColorNames, "renk"]);
+  }
+
+  function removeSecondaryColor(index: number) {
+    setSecondaryColors(secondaryColors.filter((_, i) => i !== index));
+    setSecondaryColorNames(secondaryColorNames.filter((_, i) => i !== index));
+  }
+
+  function handleSave() {
+    if (!seasons.length) {
+      toast.error("En az bir mevsim seçmelisin");
+      return;
+    }
+    onSave({
+      ...item,
+      name,
+      category,
+      style,
+      pattern,
+      seasons,
+      primaryColor,
+      colorName,
+      secondaryColors,
+      secondaryColorNames,
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Kıyafeti Düzenle</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Preview */}
+          <img src={item.imageDataUrl} alt={item.name} className="w-full h-40 object-cover rounded-lg" />
+
+          {/* Name */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">İsim</label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Kategori</label>
+            <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="top">Üst</SelectItem>
+                <SelectItem value="bottom">Alt</SelectItem>
+                <SelectItem value="dress">Elbise</SelectItem>
+                <SelectItem value="outerwear">Dış giyim</SelectItem>
+                <SelectItem value="shoes">Ayakkabı</SelectItem>
+                <SelectItem value="accessory">Aksesuar</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Style */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Stil</label>
+            <Select value={style} onValueChange={(v) => setStyle(v as Style)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="casual">Günlük</SelectItem>
+                <SelectItem value="formal">Resmi</SelectItem>
+                <SelectItem value="sport">Spor</SelectItem>
+                <SelectItem value="elegant">Şık</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Pattern */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Desen</label>
+            <Select value={pattern} onValueChange={(v) => setPattern(v as Pattern)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="solid">Düz</SelectItem>
+                <SelectItem value="striped">Çizgili</SelectItem>
+                <SelectItem value="checked">Kareli</SelectItem>
+                <SelectItem value="floral">Çiçekli</SelectItem>
+                <SelectItem value="graphic">Baskılı</SelectItem>
+                <SelectItem value="other">Diğer</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Seasons */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Mevsimler</label>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {allSeasons.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => toggleSeason(s)}
+                  className={`px-3 py-1 rounded-full text-xs border transition ${
+                    seasons.includes(s)
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground"
+                  }`}
+                >
+                  {labelSeason(s)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Primary Color */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground">Ana Renk</label>
+            <div className="flex gap-2 mt-1 items-center">
+              <input
+                type="color"
+                value={primaryColor}
+                onChange={(e) => setPrimaryColor(e.target.value)}
+                className="h-9 w-12 rounded cursor-pointer border border-border"
+              />
+              <Input
+                value={colorName}
+                onChange={(e) => setColorName(e.target.value)}
+                placeholder="Renk adı (örn: lacivert)"
+                className="flex-1"
+              />
+            </div>
+          </div>
+
+          {/* Secondary Colors */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-muted-foreground">İkincil Renkler</label>
+              {secondaryColors.length < 3 && (
+                <button onClick={addSecondaryColor} className="text-xs text-primary hover:underline">
+                  + Renk ekle
+                </button>
+              )}
+            </div>
+            <div className="space-y-2 mt-1">
+              {secondaryColors.map((color, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => updateSecondaryColor(i, e.target.value)}
+                    className="h-9 w-12 rounded cursor-pointer border border-border"
+                  />
+                  <Input
+                    value={secondaryColorNames[i] ?? ""}
+                    onChange={(e) => updateSecondaryColorName(i, e.target.value)}
+                    placeholder="Renk adı"
+                    className="flex-1"
+                  />
+                  <button onClick={() => removeSecondaryColor(i)} className="text-muted-foreground hover:text-destructive">
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))}
+              {secondaryColors.length === 0 && (
+                <p className="text-xs text-muted-foreground">İkincil renk yok. Desenli kıyafetler için ekle.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={onClose}>İptal</Button>
+            <Button className="flex-1" onClick={handleSave}>
+              <Check className="size-4 mr-1" /> Kaydet
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function Home() {
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
 
   const [season, setSeason] = useState<Season>(currentSeason());
   const [colorMode, setColorMode] = useState<ColorMode>("contrast");
@@ -75,7 +302,6 @@ function Home() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [seedId, setSeedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
-
 
   useEffect(() => {
     loadItemsAsync().then(setItems);
@@ -114,7 +340,6 @@ function Home() {
             const txt = await res.text();
             fail++;
             toast.error(`${file.name}: ${txt.slice(0, 100)}`);
-            // pause briefly so we don't hammer the gateway
             await new Promise((r) => setTimeout(r, 800));
             continue;
           }
@@ -125,6 +350,9 @@ function Home() {
             category: data.category ?? "top",
             primaryColor: data.primaryColor ?? "#888888",
             colorName: data.colorName ?? "renk",
+            secondaryColors: data.secondaryColors ?? [],
+            secondaryColorNames: data.secondaryColorNames ?? [],
+            pattern: data.pattern ?? "solid",
             seasons: data.seasons?.length ? data.seasons : ["spring", "summer", "fall", "winter"],
             style: data.style ?? "casual",
             imageDataUrl: small,
@@ -133,7 +361,6 @@ function Home() {
           const next = await addItem(item);
           setItems(next);
           ok++;
-          // small delay between successful calls to respect rate limits
           if (i < arr.length - 1) await new Promise((r) => setTimeout(r, 350));
         } catch (e) {
           fail++;
@@ -153,6 +380,18 @@ function Home() {
     if (seedId === id) setSeedId(null);
     setOutfits([]);
     toast("Silindi");
+  }
+
+  async function handleSaveEdit(updated: ClothingItem) {
+    const next = await updateItem(updated);
+    setItems(next);
+    setEditingItem(null);
+    toast.success("Kaydedildi");
+    // Regenerate outfits if seed was edited
+    if (seedId === updated.id) {
+      const result = generateOutfitsFor(updated, next, { season, colorMode, style: styleFilter, count: 3 });
+      setOutfits(result);
+    }
   }
 
   function startCombineWith(item: ClothingItem) {
@@ -179,10 +418,18 @@ function Home() {
     }
   }
 
-
   return (
     <div className="min-h-screen bg-background">
       <Toaster richColors position="top-center" />
+
+      {editingItem && (
+        <EditModal
+          item={editingItem}
+          onSave={handleSaveEdit}
+          onClose={() => setEditingItem(null)}
+        />
+      )}
+
       <header className="border-b border-border/60 bg-card/40 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto max-w-5xl px-4 py-4 flex items-center gap-2">
           <div className="size-9 rounded-xl bg-primary text-primary-foreground grid place-items-center">
@@ -202,7 +449,6 @@ function Home() {
             <TabsTrigger value="outfits"><Sparkles className="size-4 mr-2" />Kombinler</TabsTrigger>
           </TabsList>
 
-
           <TabsContent value="outfits" className="mt-4 space-y-4">
             {(() => {
               const seed = items.find((i) => i.id === seedId);
@@ -211,9 +457,7 @@ function Home() {
                   <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
                     Dolabından bir parça seç, ona göre 2-3 kombin üretelim.
                     <div className="mt-4">
-                      <Button variant="outline" onClick={() => setTab("wardrobe")}>
-                        Dolabıma git
-                      </Button>
+                      <Button variant="outline" onClick={() => setTab("wardrobe")}>Dolabıma git</Button>
                     </div>
                   </div>
                 );
@@ -227,8 +471,15 @@ function Home() {
                         <p className="text-xs text-muted-foreground">Seçili parça</p>
                         <p className="font-medium truncate">{seed.name}</p>
                         <p className="text-xs text-muted-foreground">{labelCategory(seed.category)} · {seed.colorName}</p>
+                        {seed.secondaryColors?.length > 0 && (
+                          <div className="flex gap-1 mt-1">
+                            {seed.secondaryColors.map((c, i) => (
+                              <span key={i} className="size-3 rounded-full border border-background shadow" style={{ backgroundColor: c }} title={seed.secondaryColorNames?.[i]} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => { setSeedId(null); setOutfits([]); }} aria-label="Temizle">
+                      <Button variant="ghost" size="icon" onClick={() => { setSeedId(null); setOutfits([]); }}>
                         <X className="size-4" />
                       </Button>
                     </div>
@@ -287,7 +538,6 @@ function Home() {
                 </div>
               )
             ) : (
-
               <div className="grid gap-4 sm:grid-cols-2">
                 {outfits.map((o) => (
                   <Card key={o.id}>
@@ -295,15 +545,8 @@ function Home() {
                       <div className="flex flex-wrap gap-2 mb-3">
                         {o.items.map((it) => (
                           <div key={it.id} className="relative">
-                            <img
-                              src={it.imageDataUrl}
-                              alt={it.name}
-                              className="size-20 rounded-lg object-cover border border-border"
-                            />
-                            <span
-                              className="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-background"
-                              style={{ backgroundColor: it.primaryColor }}
-                            />
+                            <img src={it.imageDataUrl} alt={it.name} className="size-20 rounded-lg object-cover border border-border" />
+                            <span className="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-background" style={{ backgroundColor: it.primaryColor }} />
                           </div>
                         ))}
                       </div>
@@ -325,20 +568,8 @@ function Home() {
           <TabsContent value="wardrobe" className="mt-4 space-y-4">
             <Card>
               <CardContent className="pt-6">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => handleFiles(e.target.files)}
-                />
-                <Button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={analyzing}
-                  className="w-full"
-                  size="lg"
-                >
+                <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+                <Button onClick={() => fileRef.current?.click()} disabled={analyzing} className="w-full" size="lg">
                   {analyzing ? (
                     <><Loader2 className="size-4 mr-2 animate-spin" /> AI analiz ediyor...</>
                   ) : (
@@ -362,30 +593,39 @@ function Home() {
                   <Card key={it.id} className="overflow-hidden group">
                     <div className="relative aspect-square">
                       <img src={it.imageDataUrl} alt={it.name} className="size-full object-cover" />
-                      <button
-                        onClick={() => handleDelete(it.id)}
-                        className="absolute top-2 right-2 size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center opacity-0 group-hover:opacity-100 transition hover:bg-destructive hover:text-destructive-foreground"
-                        aria-label="Sil"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                      <span
-                        className="absolute bottom-2 left-2 size-5 rounded-full border-2 border-background shadow"
-                        style={{ backgroundColor: it.primaryColor }}
-                      />
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <button
+                          onClick={() => setEditingItem(it)}
+                          className="size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center hover:bg-primary hover:text-primary-foreground"
+                          aria-label="Düzenle"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(it.id)}
+                          className="size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center hover:bg-destructive hover:text-destructive-foreground"
+                          aria-label="Sil"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                      <div className="absolute bottom-2 left-2 flex gap-1">
+                        <span className="size-5 rounded-full border-2 border-background shadow" style={{ backgroundColor: it.primaryColor }} />
+                        {it.secondaryColors?.map((c, i) => (
+                          <span key={i} className="size-5 rounded-full border-2 border-background shadow" style={{ backgroundColor: c }} />
+                        ))}
+                      </div>
                     </div>
                     <CardContent className="p-3 space-y-2">
                       <div>
                         <p className="text-sm font-medium truncate">{it.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {labelCategory(it.category)} · {labelStyle(it.style)}
+                          {labelCategory(it.category)} · {labelStyle(it.style)} · {labelPattern(it.pattern ?? "solid")}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {it.seasons.map((s) => (
-                          <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">
-                            {labelSeason(s)}
-                          </Badge>
+                          <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">{labelSeason(s)}</Badge>
                         ))}
                       </div>
                       <Button size="sm" className="w-full" onClick={() => startCombineWith(it)}>
@@ -396,7 +636,6 @@ function Home() {
                 ))}
               </div>
             )}
-
           </TabsContent>
         </Tabs>
       </main>
