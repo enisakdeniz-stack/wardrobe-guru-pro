@@ -11,25 +11,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  addItem,
-  currentSeason,
-  generateOutfitsFor,
-  labelCategory,
-  labelMode,
-  labelPattern,
-  labelSeason,
-  labelStyle,
-  loadItems,
-  loadItemsAsync,
-  removeItem,
-  updateItem,
-  type Category,
-  type ClothingItem,
-  type ColorMode,
-  type Outfit,
-  type Pattern,
-  type Season,
-  type Style,
+  addItem, currentSeason, generateOutfitsFor, labelCategory, labelMode,
+  labelPattern, labelSeason, labelStyle, labelSubCategory, loadItems,
+  loadItemsAsync, removeItem, updateItem, SUB_CATEGORIES,
+  type Category, type ClothingItem, type ColorMode, type Outfit,
+  type Pattern, type Season, type Style, type SubCategory,
 } from "@/lib/wardrobe";
 
 export const Route = createFileRoute("/")({
@@ -59,28 +45,22 @@ async function downscaleImage(dataUrl: string, maxSize = 768): Promise<string> {
       const w = Math.round(img.width * scale);
       const h = Math.round(img.height * scale);
       const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      ctx?.drawImage(img, 0, 0, w, h);
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d")?.drawImage(img, 0, 0, w, h);
       resolve(canvas.toDataURL("image/jpeg", 0.85));
     };
     img.src = dataUrl;
   });
 }
 
-// Edit Modal Component
-function EditModal({
-  item,
-  onSave,
-  onClose,
-}: {
-  item: ClothingItem;
-  onSave: (updated: ClothingItem) => void;
-  onClose: () => void;
-}) {
+const CATEGORY_ICONS: Record<string, string> = {
+  all: "👗", top: "👕", bottom: "👖", dress: "👗", outerwear: "🧥", shoes: "👟", accessory: "👜",
+};
+
+function EditModal({ item, onSave, onClose }: { item: ClothingItem; onSave: (u: ClothingItem) => void; onClose: () => void }) {
   const [name, setName] = useState(item.name);
   const [category, setCategory] = useState<Category>(item.category);
+  const [subCategory, setSubCategory] = useState<SubCategory>(item.subCategory ?? "diger");
   const [style, setStyle] = useState<Style>(item.style);
   const [pattern, setPattern] = useState<Pattern>(item.pattern ?? "solid");
   const [seasons, setSeasons] = useState<Season[]>(item.seasons);
@@ -92,195 +72,123 @@ function EditModal({
   const allSeasons: Season[] = ["spring", "summer", "fall", "winter"];
 
   function toggleSeason(s: Season) {
-    setSeasons((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
+    setSeasons((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
   }
 
-  function updateSecondaryColor(index: number, color: string) {
-    const updated = [...secondaryColors];
-    updated[index] = color;
-    setSecondaryColors(updated);
-  }
-
-  function updateSecondaryColorName(index: number, name: string) {
-    const updated = [...secondaryColorNames];
-    updated[index] = name;
-    setSecondaryColorNames(updated);
-  }
-
-  function addSecondaryColor() {
-    if (secondaryColors.length >= 3) return;
-    setSecondaryColors([...secondaryColors, "#888888"]);
-    setSecondaryColorNames([...secondaryColorNames, "renk"]);
-  }
-
-  function removeSecondaryColor(index: number) {
-    setSecondaryColors(secondaryColors.filter((_, i) => i !== index));
-    setSecondaryColorNames(secondaryColorNames.filter((_, i) => i !== index));
-  }
-
-  function handleSave() {
-    if (!seasons.length) {
-      toast.error("En az bir mevsim seçmelisin");
-      return;
-    }
-    onSave({
-      ...item,
-      name,
-      category,
-      style,
-      pattern,
-      seasons,
-      primaryColor,
-      colorName,
-      secondaryColors,
-      secondaryColorNames,
-    });
+  function handleCategoryChange(c: Category) {
+    setCategory(c);
+    setSubCategory(SUB_CATEGORIES[c][0]);
   }
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Kıyafeti Düzenle</DialogTitle>
-        </DialogHeader>
-
+        <DialogHeader><DialogTitle>Kıyafeti Düzenle</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          {/* Preview */}
           <img src={item.imageDataUrl} alt={item.name} className="w-full h-40 object-cover rounded-lg" />
-
-          {/* Name */}
           <div>
             <label className="text-xs font-medium text-muted-foreground">İsim</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
           </div>
-
-          {/* Category */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Kategori</label>
-            <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="top">Üst</SelectItem>
-                <SelectItem value="bottom">Alt</SelectItem>
-                <SelectItem value="dress">Elbise</SelectItem>
-                <SelectItem value="outerwear">Dış giyim</SelectItem>
-                <SelectItem value="shoes">Ayakkabı</SelectItem>
-                <SelectItem value="accessory">Aksesuar</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Kategori</label>
+              <Select value={category} onValueChange={(v) => handleCategoryChange(v as Category)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="top">Üst</SelectItem>
+                  <SelectItem value="bottom">Alt</SelectItem>
+                  <SelectItem value="dress">Elbise</SelectItem>
+                  <SelectItem value="outerwear">Dış Giyim</SelectItem>
+                  <SelectItem value="shoes">Ayakkabı</SelectItem>
+                  <SelectItem value="accessory">Aksesuar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Alt Kategori</label>
+              <Select value={subCategory} onValueChange={(v) => setSubCategory(v as SubCategory)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SUB_CATEGORIES[category].map((s) => (
+                    <SelectItem key={s} value={s}>{labelSubCategory(s)}</SelectItem>
+                  ))}
+                  <SelectItem value="diger">Diğer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-
-          {/* Style */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Stil</label>
-            <Select value={style} onValueChange={(v) => setStyle(v as Style)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="casual">Günlük</SelectItem>
-                <SelectItem value="formal">Resmi</SelectItem>
-                <SelectItem value="sport">Spor</SelectItem>
-                <SelectItem value="elegant">Şık</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Stil</label>
+              <Select value={style} onValueChange={(v) => setStyle(v as Style)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="casual">Günlük</SelectItem>
+                  <SelectItem value="formal">Resmi</SelectItem>
+                  <SelectItem value="sport">Spor</SelectItem>
+                  <SelectItem value="elegant">Şık</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Desen</label>
+              <Select value={pattern} onValueChange={(v) => setPattern(v as Pattern)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="solid">Düz</SelectItem>
+                  <SelectItem value="striped">Çizgili</SelectItem>
+                  <SelectItem value="checked">Kareli</SelectItem>
+                  <SelectItem value="floral">Çiçekli</SelectItem>
+                  <SelectItem value="graphic">Baskılı</SelectItem>
+                  <SelectItem value="other">Diğer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-
-          {/* Pattern */}
-          <div>
-            <label className="text-xs font-medium text-muted-foreground">Desen</label>
-            <Select value={pattern} onValueChange={(v) => setPattern(v as Pattern)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="solid">Düz</SelectItem>
-                <SelectItem value="striped">Çizgili</SelectItem>
-                <SelectItem value="checked">Kareli</SelectItem>
-                <SelectItem value="floral">Çiçekli</SelectItem>
-                <SelectItem value="graphic">Baskılı</SelectItem>
-                <SelectItem value="other">Diğer</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Seasons */}
           <div>
             <label className="text-xs font-medium text-muted-foreground">Mevsimler</label>
             <div className="flex gap-2 mt-1 flex-wrap">
               {allSeasons.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => toggleSeason(s)}
-                  className={`px-3 py-1 rounded-full text-xs border transition ${
-                    seasons.includes(s)
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground"
-                  }`}
-                >
+                <button key={s} onClick={() => toggleSeason(s)}
+                  className={`px-3 py-1 rounded-full text-xs border transition ${seasons.includes(s) ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>
                   {labelSeason(s)}
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Primary Color */}
           <div>
             <label className="text-xs font-medium text-muted-foreground">Ana Renk</label>
             <div className="flex gap-2 mt-1 items-center">
-              <input
-                type="color"
-                value={primaryColor}
-                onChange={(e) => setPrimaryColor(e.target.value)}
-                className="h-9 w-12 rounded cursor-pointer border border-border"
-              />
-              <Input
-                value={colorName}
-                onChange={(e) => setColorName(e.target.value)}
-                placeholder="Renk adı (örn: lacivert)"
-                className="flex-1"
-              />
+              <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="h-9 w-12 rounded cursor-pointer border border-border" />
+              <Input value={colorName} onChange={(e) => setColorName(e.target.value)} placeholder="Renk adı" className="flex-1" />
             </div>
           </div>
-
-          {/* Secondary Colors */}
           <div>
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium text-muted-foreground">İkincil Renkler</label>
               {secondaryColors.length < 3 && (
-                <button onClick={addSecondaryColor} className="text-xs text-primary hover:underline">
-                  + Renk ekle
-                </button>
+                <button onClick={() => { setSecondaryColors([...secondaryColors, "#888888"]); setSecondaryColorNames([...secondaryColorNames, "renk"]); }}
+                  className="text-xs text-primary hover:underline">+ Renk ekle</button>
               )}
             </div>
             <div className="space-y-2 mt-1">
               {secondaryColors.map((color, i) => (
                 <div key={i} className="flex gap-2 items-center">
-                  <input
-                    type="color"
-                    value={color}
-                    onChange={(e) => updateSecondaryColor(i, e.target.value)}
-                    className="h-9 w-12 rounded cursor-pointer border border-border"
-                  />
-                  <Input
-                    value={secondaryColorNames[i] ?? ""}
-                    onChange={(e) => updateSecondaryColorName(i, e.target.value)}
-                    placeholder="Renk adı"
-                    className="flex-1"
-                  />
-                  <button onClick={() => removeSecondaryColor(i)} className="text-muted-foreground hover:text-destructive">
-                    <X className="size-4" />
-                  </button>
+                  <input type="color" value={color} onChange={(e) => { const u = [...secondaryColors]; u[i] = e.target.value; setSecondaryColors(u); }} className="h-9 w-12 rounded cursor-pointer border border-border" />
+                  <Input value={secondaryColorNames[i] ?? ""} onChange={(e) => { const u = [...secondaryColorNames]; u[i] = e.target.value; setSecondaryColorNames(u); }} placeholder="Renk adı" className="flex-1" />
+                  <button onClick={() => { setSecondaryColors(secondaryColors.filter((_, j) => j !== i)); setSecondaryColorNames(secondaryColorNames.filter((_, j) => j !== i)); }} className="text-muted-foreground hover:text-destructive"><X className="size-4" /></button>
                 </div>
               ))}
-              {secondaryColors.length === 0 && (
-                <p className="text-xs text-muted-foreground">İkincil renk yok. Desenli kıyafetler için ekle.</p>
-              )}
+              {secondaryColors.length === 0 && <p className="text-xs text-muted-foreground">Desenli kıyafetler için ekle.</p>}
             </div>
           </div>
-
-          {/* Actions */}
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={onClose}>İptal</Button>
-            <Button className="flex-1" onClick={handleSave}>
+            <Button className="flex-1" onClick={() => {
+              if (!seasons.length) { toast.error("En az bir mevsim seç"); return; }
+              onSave({ ...item, name, category, subCategory, style, pattern, seasons, primaryColor, colorName, secondaryColors, secondaryColorNames });
+            }}>
               <Check className="size-4 mr-1" /> Kaydet
             </Button>
           </div>
@@ -295,27 +203,39 @@ function Home() {
   const [analyzing, setAnalyzing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [editingItem, setEditingItem] = useState<ClothingItem | null>(null);
-
   const [season, setSeason] = useState<Season>(currentSeason());
   const [colorMode, setColorMode] = useState<ColorMode>("contrast");
   const [styleFilter, setStyleFilter] = useState<Style | "any">("any");
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [seedId, setSeedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
+  const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
+  const [subCategoryFilter, setSubCategoryFilter] = useState<SubCategory | "all">("all");
 
-  useEffect(() => {
-    loadItemsAsync().then(setItems);
-  }, []);
+  useEffect(() => { loadItemsAsync().then(setItems); }, []);
+
+  const categories: Array<{ value: Category | "all"; label: string }> = [
+    { value: "all", label: "Tümü" },
+    { value: "top", label: "Üst" },
+    { value: "bottom", label: "Alt" },
+    { value: "dress", label: "Elbise" },
+    { value: "outerwear", label: "Dış Giyim" },
+    { value: "shoes", label: "Ayakkabı" },
+    { value: "accessory", label: "Aksesuar" },
+  ];
+
+  const filteredItems = items.filter((it) => {
+    if (categoryFilter !== "all" && it.category !== categoryFilter) return false;
+    if (subCategoryFilter !== "all" && it.subCategory !== subCategoryFilter) return false;
+    return true;
+  });
+
+  const availableSubCategories = categoryFilter !== "all" ? SUB_CATEGORIES[categoryFilter] : [];
 
   async function analyzeOne(small: string, attempt = 0): Promise<Response> {
-    const res = await fetch("/api/analyze-clothing", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageDataUrl: small }),
-    });
+    const res = await fetch("/api/analyze-clothing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: small }) });
     if ((res.status === 429 || res.status === 503) && attempt < 4) {
-      const wait = 1500 * Math.pow(2, attempt);
-      await new Promise((r) => setTimeout(r, wait));
+      await new Promise((r) => setTimeout(r, 1500 * Math.pow(2, attempt)));
       return analyzeOne(small, attempt + 1);
     }
     return res;
@@ -325,8 +245,7 @@ function Home() {
     if (!files || files.length === 0) return;
     setAnalyzing(true);
     const arr = Array.from(files);
-    let ok = 0;
-    let fail = 0;
+    let ok = 0, fail = 0;
     const tId = toast.loading(`0/${arr.length} analiz ediliyor...`);
     try {
       for (let i = 0; i < arr.length; i++) {
@@ -336,36 +255,20 @@ function Home() {
           const raw = await fileToDataUrl(file);
           const small = await downscaleImage(raw);
           const res = await analyzeOne(small);
-          if (!res.ok) {
-            const txt = await res.text();
-            fail++;
-            toast.error(`${file.name}: ${txt.slice(0, 100)}`);
-            await new Promise((r) => setTimeout(r, 800));
-            continue;
-          }
+          if (!res.ok) { fail++; toast.error(`${file.name}: ${(await res.text()).slice(0, 100)}`); await new Promise((r) => setTimeout(r, 800)); continue; }
           const data = await res.json();
           const item: ClothingItem = {
-            id: crypto.randomUUID(),
-            name: data.name ?? "Kıyafet",
-            category: data.category ?? "top",
-            primaryColor: data.primaryColor ?? "#888888",
-            colorName: data.colorName ?? "renk",
-            secondaryColors: data.secondaryColors ?? [],
-            secondaryColorNames: data.secondaryColorNames ?? [],
-            pattern: data.pattern ?? "solid",
+            id: crypto.randomUUID(), name: data.name ?? "Kıyafet", category: data.category ?? "top",
+            subCategory: data.subCategory ?? "diger", primaryColor: data.primaryColor ?? "#888888",
+            colorName: data.colorName ?? "renk", secondaryColors: data.secondaryColors ?? [],
+            secondaryColorNames: data.secondaryColorNames ?? [], pattern: data.pattern ?? "solid",
             seasons: data.seasons?.length ? data.seasons : ["spring", "summer", "fall", "winter"],
-            style: data.style ?? "casual",
-            imageDataUrl: small,
-            createdAt: Date.now(),
+            style: data.style ?? "casual", imageDataUrl: small, createdAt: Date.now(),
           };
           const next = await addItem(item);
-          setItems(next);
-          ok++;
+          setItems(next); ok++;
           if (i < arr.length - 1) await new Promise((r) => setTimeout(r, 350));
-        } catch (e) {
-          fail++;
-          toast.error(`${file.name}: ${(e as Error).message}`);
-        }
+        } catch (e) { fail++; toast.error(`${file.name}: ${(e as Error).message}`); }
       }
       toast.success(`${ok} eklendi${fail ? `, ${fail} başarısız` : ""}`, { id: tId });
     } finally {
@@ -375,66 +278,40 @@ function Home() {
   }
 
   async function handleDelete(id: string) {
-    const next = await removeItem(id);
-    setItems(next);
-    if (seedId === id) setSeedId(null);
-    setOutfits([]);
+    setItems(await removeItem(id));
+    if (seedId === id) { setSeedId(null); setOutfits([]); }
     toast("Silindi");
   }
 
   async function handleSaveEdit(updated: ClothingItem) {
     const next = await updateItem(updated);
-    setItems(next);
-    setEditingItem(null);
-    toast.success("Kaydedildi");
-    // Regenerate outfits if seed was edited
-    if (seedId === updated.id) {
-      const result = generateOutfitsFor(updated, next, { season, colorMode, style: styleFilter, count: 3 });
-      setOutfits(result);
-    }
+    setItems(next); setEditingItem(null); toast.success("Kaydedildi");
+    if (seedId === updated.id) setOutfits(generateOutfitsFor(updated, next, { season, colorMode, style: styleFilter, count: 3 }));
   }
 
   function startCombineWith(item: ClothingItem) {
-    setSeedId(item.id);
-    setTab("outfits");
+    setSeedId(item.id); setTab("outfits");
     const result = generateOutfitsFor(item, loadItems(), { season, colorMode, style: styleFilter, count: 3 });
     setOutfits(result);
-    if (result.length === 0) {
-      toast.error("Bu parçayla uygun kombin bulunamadı. Dolaba daha çok parça ekle veya filtreyi yumuşat.");
-    }
+    if (!result.length) toast.error("Bu parçayla uygun kombin bulunamadı. Dolaba daha çok parça ekle.");
   }
 
   function handleGenerate() {
     const seed = items.find((i) => i.id === seedId);
-    if (!seed) {
-      toast.error("Önce dolabından bir parça seç");
-      setTab("wardrobe");
-      return;
-    }
+    if (!seed) { toast.error("Önce dolabından bir parça seç"); setTab("wardrobe"); return; }
     const result = generateOutfitsFor(seed, items, { season, colorMode, style: styleFilter, count: 3 });
     setOutfits(result);
-    if (result.length === 0) {
-      toast.error("Bu kriterlere uygun kombin bulunamadı. Filtreyi yumuşat.");
-    }
+    if (!result.length) toast.error("Bu kriterlere uygun kombin bulunamadı. Filtreyi yumuşat.");
   }
 
   return (
     <div className="min-h-screen bg-background">
       <Toaster richColors position="top-center" />
-
-      {editingItem && (
-        <EditModal
-          item={editingItem}
-          onSave={handleSaveEdit}
-          onClose={() => setEditingItem(null)}
-        />
-      )}
+      {editingItem && <EditModal item={editingItem} onSave={handleSaveEdit} onClose={() => setEditingItem(null)} />}
 
       <header className="border-b border-border/60 bg-card/40 backdrop-blur sticky top-0 z-10">
         <div className="mx-auto max-w-5xl px-4 py-4 flex items-center gap-2">
-          <div className="size-9 rounded-xl bg-primary text-primary-foreground grid place-items-center">
-            <Shirt className="size-5" />
-          </div>
+          <div className="size-9 rounded-xl bg-primary text-primary-foreground grid place-items-center"><Shirt className="size-5" /></div>
           <div>
             <h1 className="text-lg font-semibold leading-tight">Dolabım</h1>
             <p className="text-xs text-muted-foreground">AI destekli kombin asistanı</p>
@@ -452,181 +329,173 @@ function Home() {
           <TabsContent value="outfits" className="mt-4 space-y-4">
             {(() => {
               const seed = items.find((i) => i.id === seedId);
-              if (!seed) {
-                return (
-                  <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                    Dolabından bir parça seç, ona göre 2-3 kombin üretelim.
-                    <div className="mt-4">
-                      <Button variant="outline" onClick={() => setTab("wardrobe")}>Dolabıma git</Button>
+              if (!seed) return (
+                <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                  Dolabından bir parça seç, ona göre kombin üretelim.
+                  <div className="mt-4"><Button variant="outline" onClick={() => setTab("wardrobe")}>Dolabıma git</Button></div>
+                </div>
+              );
+              return (
+                <Card><CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <img src={seed.imageDataUrl} alt={seed.name} className="size-16 rounded-lg object-cover border border-border" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground">Seçili parça</p>
+                      <p className="font-medium truncate">{seed.name}</p>
+                      <p className="text-xs text-muted-foreground">{labelCategory(seed.category)} · {labelSubCategory(seed.subCategory ?? "diger")} · {seed.colorName}</p>
+                      {(seed.secondaryColors?.length ?? 0) > 0 && (
+                        <div className="flex gap-1 mt-1">
+                          {seed.secondaryColors.map((c, i) => <span key={i} className="size-3 rounded-full border border-background shadow" style={{ backgroundColor: c }} />)}
+                        </div>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => { setSeedId(null); setOutfits([]); }}><X className="size-4" /></Button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-4 mt-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Mevsim</label>
+                      <Select value={season} onValueChange={(v) => setSeason(v as Season)}>
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="spring">İlkbahar</SelectItem>
+                          <SelectItem value="summer">Yaz</SelectItem>
+                          <SelectItem value="fall">Sonbahar</SelectItem>
+                          <SelectItem value="winter">Kış</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Renk uyumu</label>
+                      <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="contrast">Kontrast</SelectItem>
+                          <SelectItem value="analogous">Yakın renkler</SelectItem>
+                          <SelectItem value="monochrome">Tek renk</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Stil</label>
+                      <Select value={styleFilter} onValueChange={(v) => setStyleFilter(v as Style | "any")}>
+                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="any">Hepsi</SelectItem>
+                          <SelectItem value="casual">Günlük</SelectItem>
+                          <SelectItem value="formal">Resmi</SelectItem>
+                          <SelectItem value="sport">Spor</SelectItem>
+                          <SelectItem value="elegant">Şık</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end">
+                      <Button className="w-full" onClick={handleGenerate}><Sparkles className="size-4 mr-2" />Yeniden üret</Button>
                     </div>
                   </div>
-                );
-              }
-              return (
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-3">
-                      <img src={seed.imageDataUrl} alt={seed.name} className="size-16 rounded-lg object-cover border border-border" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-muted-foreground">Seçili parça</p>
-                        <p className="font-medium truncate">{seed.name}</p>
-                        <p className="text-xs text-muted-foreground">{labelCategory(seed.category)} · {seed.colorName}</p>
-                        {seed.secondaryColors?.length > 0 && (
-                          <div className="flex gap-1 mt-1">
-                            {seed.secondaryColors.map((c, i) => (
-                              <span key={i} className="size-3 rounded-full border border-background shadow" style={{ backgroundColor: c }} title={seed.secondaryColorNames?.[i]} />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <Button variant="ghost" size="icon" onClick={() => { setSeedId(null); setOutfits([]); }}>
-                        <X className="size-4" />
-                      </Button>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-4 mt-4">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">Mevsim</label>
-                        <Select value={season} onValueChange={(v) => setSeason(v as Season)}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="spring">İlkbahar</SelectItem>
-                            <SelectItem value="summer">Yaz</SelectItem>
-                            <SelectItem value="fall">Sonbahar</SelectItem>
-                            <SelectItem value="winter">Kış</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">Renk uyumu</label>
-                        <Select value={colorMode} onValueChange={(v) => setColorMode(v as ColorMode)}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="contrast">Kontrast</SelectItem>
-                            <SelectItem value="analogous">Yakın renkler</SelectItem>
-                            <SelectItem value="monochrome">Tek renk</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">Stil</label>
-                        <Select value={styleFilter} onValueChange={(v) => setStyleFilter(v as Style | "any")}>
-                          <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="any">Hepsi</SelectItem>
-                            <SelectItem value="casual">Günlük</SelectItem>
-                            <SelectItem value="formal">Resmi</SelectItem>
-                            <SelectItem value="sport">Spor</SelectItem>
-                            <SelectItem value="elegant">Şık</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="flex items-end">
-                        <Button className="w-full" onClick={handleGenerate}>
-                          <Sparkles className="size-4 mr-2" /> Yeniden üret
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                </CardContent></Card>
               );
             })()}
-
-            {outfits.length === 0 ? (
-              seedId && (
-                <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                  Bu parçayla uygun kombin bulunamadı. Dolaba parça ekle veya filtreyi yumuşat.
-                </div>
-              )
-            ) : (
+            {outfits.length === 0 ? (seedId && (
+              <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                Bu parçayla uygun kombin bulunamadı. Dolaba parça ekle veya filtreyi yumuşat.
+              </div>
+            )) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 {outfits.map((o) => (
-                  <Card key={o.id}>
-                    <CardContent className="pt-6">
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {o.items.map((it) => (
-                          <div key={it.id} className="relative">
-                            <img src={it.imageDataUrl} alt={it.name} className="size-20 rounded-lg object-cover border border-border" />
-                            <span className="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-background" style={{ backgroundColor: it.primaryColor }} />
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-sm font-medium">{o.reason}</p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {o.items.map((it) => (
-                          <Badge key={it.id} variant="secondary" className="text-xs">
-                            {labelCategory(it.category)}: {it.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <Card key={o.id}><CardContent className="pt-6">
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {o.items.map((it) => (
+                        <div key={it.id} className="relative">
+                          <img src={it.imageDataUrl} alt={it.name} className="size-20 rounded-lg object-cover border border-border" />
+                          <span className="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-background" style={{ backgroundColor: it.primaryColor }} />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm font-medium">{o.reason}</p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {o.items.map((it) => (
+                        <Badge key={it.id} variant="secondary" className="text-xs">{labelSubCategory(it.subCategory ?? "diger")}: {it.name}</Badge>
+                      ))}
+                    </div>
+                  </CardContent></Card>
                 ))}
               </div>
             )}
           </TabsContent>
 
           <TabsContent value="wardrobe" className="mt-4 space-y-4">
-            <Card>
-              <CardContent className="pt-6">
-                <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
-                <Button onClick={() => fileRef.current?.click()} disabled={analyzing} className="w-full" size="lg">
-                  {analyzing ? (
-                    <><Loader2 className="size-4 mr-2 animate-spin" /> AI analiz ediyor...</>
-                  ) : (
-                    <><Upload className="size-4 mr-2" /> Kıyafet fotoğrafı ekle</>
-                  )}
-                </Button>
-                <p className="text-xs text-muted-foreground mt-2 text-center">
-                  AI fotoğraftan türü, rengini ve mevsimi otomatik tespit eder.
-                </p>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="pt-6">
+              <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+              <Button onClick={() => fileRef.current?.click()} disabled={analyzing} className="w-full" size="lg">
+                {analyzing ? <><Loader2 className="size-4 mr-2 animate-spin" />AI analiz ediyor...</> : <><Upload className="size-4 mr-2" />Kıyafet fotoğrafı ekle</>}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2 text-center">AI fotoğraftan türü, rengini ve mevsimi otomatik tespit eder.</p>
+            </CardContent></Card>
 
-            {items.length === 0 ? (
+            {/* Kategori filtreleri */}
+            <div className="space-y-2">
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                {categories.map((c) => (
+                  <button key={c.value} onClick={() => { setCategoryFilter(c.value); setSubCategoryFilter("all"); }}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm whitespace-nowrap border transition ${categoryFilter === c.value ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground bg-background"}`}>
+                    <span>{CATEGORY_ICONS[c.value]}</span> {c.label}
+                    {c.value !== "all" && <span className="text-xs opacity-70">({items.filter(i => i.category === c.value).length})</span>}
+                  </button>
+                ))}
+              </div>
+
+              {/* Alt kategori filtreleri */}
+              {categoryFilter !== "all" && availableSubCategories.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  <button onClick={() => setSubCategoryFilter("all")}
+                    className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${subCategoryFilter === "all" ? "bg-secondary text-secondary-foreground border-secondary" : "border-border text-muted-foreground"}`}>
+                    Tümü
+                  </button>
+                  {availableSubCategories.map((s) => {
+                    const count = items.filter(i => i.category === categoryFilter && i.subCategory === s).length;
+                    if (count === 0) return null;
+                    return (
+                      <button key={s} onClick={() => setSubCategoryFilter(s)}
+                        className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition ${subCategoryFilter === s ? "bg-secondary text-secondary-foreground border-secondary" : "border-border text-muted-foreground"}`}>
+                        {labelSubCategory(s)} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {filteredItems.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
                 <Shirt className="size-6 mx-auto mb-2 opacity-50" />
-                Henüz kıyafet eklemedin.
+                {items.length === 0 ? "Henüz kıyafet eklemedin." : "Bu kategoride kıyafet yok."}
               </div>
             ) : (
               <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-                {items.map((it) => (
-                  <Card key={it.id} className="overflow-hidden group">
+                {filteredItems.map((it) => (
+                  <Card key={it.id} className="overflow-hidden">
                     <div className="relative aspect-square">
                       <img src={it.imageDataUrl} alt={it.name} className="size-full object-cover" />
                       <div className="absolute top-2 right-2 flex gap-1 opacity-100">
-                        <button
-                          onClick={() => setEditingItem(it)}
-                          className="size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center hover:bg-primary hover:text-primary-foreground"
-                          aria-label="Düzenle"
-                        >
+                        <button onClick={() => setEditingItem(it)} className="size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center hover:bg-primary hover:text-primary-foreground" aria-label="Düzenle">
                           <Pencil className="size-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(it.id)}
-                          className="size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center hover:bg-destructive hover:text-destructive-foreground"
-                          aria-label="Sil"
-                        >
+                        <button onClick={() => handleDelete(it.id)} className="size-7 rounded-full bg-background/80 backdrop-blur grid place-items-center hover:bg-destructive hover:text-destructive-foreground" aria-label="Sil">
                           <Trash2 className="size-3.5" />
                         </button>
                       </div>
                       <div className="absolute bottom-2 left-2 flex gap-1">
                         <span className="size-5 rounded-full border-2 border-background shadow" style={{ backgroundColor: it.primaryColor }} />
-                        {it.secondaryColors?.map((c, i) => (
-                          <span key={i} className="size-5 rounded-full border-2 border-background shadow" style={{ backgroundColor: c }} />
-                        ))}
+                        {it.secondaryColors?.map((c, i) => <span key={i} className="size-5 rounded-full border-2 border-background shadow" style={{ backgroundColor: c }} />)}
                       </div>
                     </div>
                     <CardContent className="p-3 space-y-2">
                       <div>
                         <p className="text-sm font-medium truncate">{it.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {labelCategory(it.category)} · {labelStyle(it.style)} · {labelPattern(it.pattern ?? "solid")}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{labelSubCategory(it.subCategory ?? "diger")} · {labelStyle(it.style)}</p>
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {it.seasons.map((s) => (
-                          <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">{labelSeason(s)}</Badge>
-                        ))}
+                        {it.seasons.map((s) => <Badge key={s} variant="outline" className="text-[10px] px-1.5 py-0">{labelSeason(s)}</Badge>)}
                       </div>
                       <Button size="sm" className="w-full" onClick={() => startCombineWith(it)}>
                         <Wand2 className="size-3.5 mr-1.5" /> Kombin üret
@@ -642,4 +511,3 @@ function Home() {
     </div>
   );
 }
-
