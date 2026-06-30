@@ -4,16 +4,11 @@ export const Route = createFileRoute("/api/analyze-clothing")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const key = process.env.GEMINI_API_KEY;
-        if (!key) return new Response("Missing GEMINI_API_KEY", { status: 500 });
+        const key = process.env.LOVABLE_API_KEY;
+        if (!key) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
 
         const { imageDataUrl } = (await request.json()) as { imageDataUrl: string };
         if (!imageDataUrl) return new Response("Missing image", { status: 400 });
-
-        const base64Match = imageDataUrl.match(/^data:(.+);base64,(.+)$/);
-        if (!base64Match) return new Response("Invalid image format", { status: 400 });
-        const mimeType = base64Match[1];
-        const base64Data = base64Match[2];
 
         const prompt = `Sen bir moda asistanısın. Verilen kıyafet fotoğrafını analiz et ve SADECE şu JSON formatında cevap ver, başka hiçbir şey yazma:
 {
@@ -30,34 +25,38 @@ export const Route = createFileRoute("/api/analyze-clothing")({
 Sadece JSON döndür, başka metin yazma.`;
 
         const body = {
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: base64Data } }
-            ]
-          }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 500 }
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: prompt },
+                { type: "image_url", image_url: { url: imageDataUrl } },
+              ],
+            },
+          ],
+          temperature: 0.1,
+          max_tokens: 500,
         };
 
-        const res = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-goog-api-key": key,
-            },
-            body: JSON.stringify(body),
-          }
-        );
+        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${key}`,
+          },
+          body: JSON.stringify(body),
+        });
 
         if (!res.ok) {
           const text = await res.text();
           return new Response(text, { status: res.status });
         }
 
-        const data = await res.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
-        let content = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+        const data = await res.json() as {
+          choices?: Array<{ message?: { content?: string } }>;
+        };
+        let content = data.choices?.[0]?.message?.content ?? "{}";
         content = content.replace(/```json\s*/g, "").replace(/```\s*$/g, "").trim();
 
         try {
