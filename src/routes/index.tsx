@@ -171,8 +171,6 @@ function EditModal({ item, onSave, onClose }: { item: ClothingItem; onSave: (u: 
 }
 
 function Home() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -185,21 +183,9 @@ function Home() {
   const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setAuthLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) loadItemsAsync().then(setItems);
-      else setItems([]);
-    });
-    return () => subscription.unsubscribe();
+    loadItemsAsync().then(setItems);
   }, []);
 
-  useEffect(() => {
-    if (user) loadItemsAsync().then(setItems);
-  }, [user]);
 
   async function analyzeOne(small: string, attempt = 0): Promise<Response> {
     const res = await fetch("/api/analyze-clothing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: small }) });
