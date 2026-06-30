@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Shirt, Sparkles, Trash2, Upload, Loader2, Wand2, X, Pencil, Check, LogOut, Mail } from "lucide-react";
+import { Shirt, Sparkles, Trash2, Upload, Loader2, Wand2, X, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -10,8 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { supabase } from "@/lib/supabase";
-import type { User } from "@supabase/supabase-js";
 import {
   addItem, currentSeason, generateOutfitsFor, labelCategory, labelMode,
   labelPattern, labelSeason, labelStyle, loadItems, loadItemsAsync,
@@ -19,6 +17,7 @@ import {
   type Category, type ClothingItem, type ColorMode, type Outfit,
   type Pattern, type Season, type Style,
 } from "@/lib/wardrobe";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
