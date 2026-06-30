@@ -259,14 +259,6 @@ function Home() {
     if (!result.length) toast.error("Bu kriterlere uygun kombin bulunamadı.");
   }
 
-  if (authLoading) return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <Loader2 className="size-8 animate-spin text-primary" />
-    </div>
-  );
-
-  if (!user) return <LoginScreen />;
-
   return (
     <div className="min-h-screen bg-background">
       <Toaster richColors position="top-center" />
@@ -279,13 +271,11 @@ function Home() {
           </div>
           <div className="flex-1">
             <h1 className="text-lg font-semibold leading-tight">Dolabım</h1>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
+            <p className="text-xs text-muted-foreground">AI destekli kombin asistanı</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => supabase.auth.signOut()} title="Çıkış">
-            <LogOut className="size-4" />
-          </Button>
         </div>
       </header>
+
 
       <main className="mx-auto max-w-5xl px-4 py-6">
         <Tabs value={tab} onValueChange={(v) => setTab(v as "outfits" | "wardrobe")}>
