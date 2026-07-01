@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { get, set } from "idb-keyval";
 
 export type Category = "top" | "bottom" | "dress" | "outerwear" | "shoes" | "accessory";
 export type Season = "spring" | "summer" | "fall" | "winter";
@@ -27,24 +27,25 @@ export interface Outfit {
   reason: string;
 }
 
-function dbToItem(row: Record<string, unknown>): ClothingItem {
+const KEY = "wardrobe.items.v2";
+let cache: ClothingItem[] | null = null;
+
+function normalize(raw: Partial<ClothingItem> & { id: string; imageDataUrl: string }): ClothingItem {
   return {
-    id: row.id as string,
-    name: row.name as string,
-    category: row.category as Category,
-    primaryColor: row.primary_color as string,
-    colorName: row.color_name as string,
-    secondaryColors: (row.secondary_colors as string[]) ?? [],
-    secondaryColorNames: (row.secondary_color_names as string[]) ?? [],
-    pattern: (row.pattern as Pattern) ?? "solid",
-    seasons: (row.seasons as Season[]) ?? [],
-    style: row.style as Style,
-    imageDataUrl: row.image_data_url as string,
-    createdAt: row.created_at as number,
+    id: raw.id,
+    name: raw.name ?? "Kıyafet",
+    category: (raw.category as Category) ?? "top",
+    primaryColor: raw.primaryColor ?? "#888888",
+    colorName: raw.colorName ?? "renk",
+    secondaryColors: raw.secondaryColors ?? [],
+    secondaryColorNames: raw.secondaryColorNames ?? [],
+    pattern: (raw.pattern as Pattern) ?? "solid",
+    seasons: raw.seasons ?? ["spring", "summer", "fall", "winter"],
+    style: (raw.style as Style) ?? "casual",
+    imageDataUrl: raw.imageDataUrl,
+    createdAt: raw.createdAt ?? Date.now(),
   };
 }
-
-let cache: ClothingItem[] | null = null;
 
 export function loadItems(): ClothingItem[] {
   return cache ?? [];
@@ -52,62 +53,45 @@ export function loadItems(): ClothingItem[] {
 
 export async function loadItemsAsync(): Promise<ClothingItem[]> {
   if (cache !== null) return cache;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { cache = []; return []; }
-  const { data, error } = await supabase
-    .from("clothing_items")
-    .select("*")
-    .eq("user_key", user.id)
-    .order("created_at", { ascending: false });
-  if (error || !data) { cache = []; return []; }
-  cache = data.map(dbToItem);
+  try {
+    const stored = (await get<ClothingItem[]>(KEY)) ?? [];
+    cache = stored.map((i) => normalize(i));
+  } catch {
+    cache = [];
+  }
+  // localStorage fallback migration
+  if (cache.length === 0 && typeof window !== "undefined") {
+    try {
+      const legacy = window.localStorage.getItem(KEY) ?? window.localStorage.getItem("wardrobe.items.v1");
+      if (legacy) {
+        const parsed = JSON.parse(legacy) as ClothingItem[];
+        cache = parsed.map((i) => normalize(i));
+        await set(KEY, cache);
+      }
+    } catch { /* ignore */ }
+  }
   return cache;
 }
 
+async function persist() {
+  if (cache) await set(KEY, cache);
+}
+
 export async function addItem(item: ClothingItem): Promise<ClothingItem[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return cache ?? [];
-  await supabase.from("clothing_items").insert({
-    id: item.id,
-    user_key: user.id,
-    name: item.name,
-    category: item.category,
-    sub_category: "diger",
-    primary_color: item.primaryColor,
-    color_name: item.colorName,
-    secondary_colors: item.secondaryColors ?? [],
-    secondary_color_names: item.secondaryColorNames ?? [],
-    pattern: item.pattern ?? "solid",
-    seasons: item.seasons,
-    style: item.style,
-    image_data_url: item.imageDataUrl,
-    created_at: item.createdAt,
-  });
-  cache = [item, ...(cache ?? [])];
+  cache = [normalize(item), ...(cache ?? [])];
+  await persist();
   return cache;
 }
 
 export async function removeItem(id: string): Promise<ClothingItem[]> {
-  await supabase.from("clothing_items").delete().eq("id", id);
   cache = (cache ?? []).filter((i) => i.id !== id);
+  await persist();
   return cache;
 }
 
 export async function updateItem(updated: ClothingItem): Promise<ClothingItem[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return cache ?? [];
-  await supabase.from("clothing_items").update({
-    name: updated.name,
-    category: updated.category,
-    primary_color: updated.primaryColor,
-    color_name: updated.colorName,
-    secondary_colors: updated.secondaryColors ?? [],
-    secondary_color_names: updated.secondaryColorNames ?? [],
-    pattern: updated.pattern ?? "solid",
-    seasons: updated.seasons,
-    style: updated.style,
-  }).eq("id", updated.id);
-  cache = (cache ?? []).map((i) => i.id === updated.id ? updated : i);
+  cache = (cache ?? []).map((i) => (i.id === updated.id ? normalize(updated) : i));
+  await persist();
   return cache;
 }
 
