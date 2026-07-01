@@ -181,7 +181,6 @@ function Home() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [seedId, setSeedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   useEffect(() => {
     loadItemsAsync().then(setItems);
@@ -387,45 +386,14 @@ function Home() {
               <p className="text-xs text-muted-foreground mt-2 text-center">AI fotoğraftan türü, rengini ve mevsimi otomatik tespit eder.</p>
             </CardContent></Card>
 
-            {/* Kategori filtreleri */}
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {[
-                { value: "all", label: "Tümü", icon: "👗" },
-                { value: "top", label: "Üst", icon: "👕" },
-                { value: "bottom", label: "Alt", icon: "👖" },
-                { value: "outerwear", label: "Dış Giyim", icon: "🧥" },
-                { value: "shoes", label: "Ayakkabı", icon: "👟" },
-                { value: "dress", label: "Elbise", icon: "👗" },
-                { value: "accessory", label: "Aksesuar", icon: "👜" },
-              ].map((cat) => (
-                <button
-                  key={cat.value}
-                  onClick={() => setCategoryFilter(cat.value)}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm whitespace-nowrap border transition-colors ${
-                    categoryFilter === cat.value
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "border-border text-muted-foreground bg-background"
-                  }`}
-                >
-                  <span>{cat.icon}</span>
-                  <span>{cat.label}</span>
-                  {cat.value !== "all" && (
-                    <span className="text-xs opacity-70">
-                      ({items.filter(i => i.category === cat.value).length})
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {items.filter(i => categoryFilter === "all" || i.category === categoryFilter).length === 0 ? (
+            {items.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
                 <Shirt className="size-6 mx-auto mb-2 opacity-50" />
                 Henüz kıyafet eklemedin.
               </div>
             ) : (
               <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-                {items.filter(i => categoryFilter === "all" || i.category === categoryFilter).map((it) => (
+                {items.map((it) => (
                   <Card key={it.id} className="overflow-hidden">
                     <div className="relative aspect-square">
                       <img src={it.imageDataUrl} alt={it.name} className="size-full object-cover" />
