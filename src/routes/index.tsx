@@ -181,6 +181,7 @@ function Home() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [seedId, setSeedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
+  const [catFilter, setCatFilter] = useState<Category | "all">("all");
 
   useEffect(() => {
     loadItemsAsync().then(setItems);
