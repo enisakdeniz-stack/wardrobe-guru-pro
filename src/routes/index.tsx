@@ -181,6 +181,7 @@ function Home() {
   const [outfits, setOutfits] = useState<Outfit[]>([]);
   const [seedId, setSeedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
+  const [catFilter, setCatFilter] = useState<Category | "all">("all");
 
   useEffect(() => {
     loadItemsAsync().then(setItems);
@@ -386,14 +387,49 @@ function Home() {
               <p className="text-xs text-muted-foreground mt-2 text-center">AI fotoğraftan türü, rengini ve mevsimi otomatik tespit eder.</p>
             </CardContent></Card>
 
+            {items.length > 0 && (
+              <div className="-mx-4 px-4 overflow-x-auto scrollbar-none">
+                <div className="flex gap-2 w-max pb-1">
+                  {([
+                    ["all", "Tümü"],
+                    ["top", "Üst"],
+                    ["bottom", "Alt"],
+                    ["outerwear", "Dış Giyim"],
+                    ["shoes", "Ayakkabı"],
+                    ["dress", "Elbise"],
+                    ["accessory", "Aksesuar"],
+                  ] as [Category | "all", string][]).map(([val, label]) => {
+                    const count = val === "all" ? items.length : items.filter((i) => i.category === val).length;
+                    const active = catFilter === val;
+                    return (
+                      <button
+                        key={val}
+                        onClick={() => setCatFilter(val)}
+                        className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition ${active ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                      >
+                        {label} <span className={`ml-1 ${active ? "opacity-80" : "opacity-60"}`}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {items.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
                 <Shirt className="size-6 mx-auto mb-2 opacity-50" />
                 Henüz kıyafet eklemedin.
               </div>
-            ) : (
+            ) : (() => {
+              const filtered = catFilter === "all" ? items : items.filter((i) => i.category === catFilter);
+              if (filtered.length === 0) return (
+                <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                  Bu kategoride kıyafet yok.
+                </div>
+              );
+              return (
               <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-                {items.map((it) => (
+                {filtered.map((it) => (
                   <Card key={it.id} className="overflow-hidden">
                     <div className="relative aspect-square">
                       <img src={it.imageDataUrl} alt={it.name} className="size-full object-cover" />
@@ -421,7 +457,8 @@ function Home() {
                   </Card>
                 ))}
               </div>
-            )}
+              );
+            })()}
           </TabsContent>
         </Tabs>
       </main>
