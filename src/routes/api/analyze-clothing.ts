@@ -1,73 +1,103 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+const SYSTEM_PROMPT = `Sen bir moda asistanısın. Verilen kıyafet fotoğrafını analiz et ve SADECE şu JSON şemasında cevap ver, ek metin yok:
+{
+  "name": "kısa Türkçe isim, örn: Mavi çizgili gömlek",
+  "category": "top" | "bottom" | "dress" | "outerwear" | "shoes" | "accessory",
+  "primaryColor": "#RRGGBB formatında EN dominant renk",
+  "colorName": "Türkçe dominant renk adı (lacivert, krem, vb)",
+  "secondaryColors": ["#RRGGBB"] (varsa diğer belirgin renkler, yoksa boş dizi []),
+  "secondaryColorNames": ["Türkçe renk adı"] (secondaryColors ile aynı sırada, yoksa boş dizi []),
+  "seasons": ["spring" | "summer" | "fall" | "winter"] (uygun mevsimler),
+  "style": "casual" | "formal" | "sport" | "elegant",
+  "pattern": "solid" | "striped" | "checked" | "floral" | "graphic" | "other"
+}
+
+Önemli kurallar:
+- Desenli kıyafetlerde (çizgili, kareli, çiçekli vb.) tüm belirgin renkleri secondaryColors dizisine ekle (en fazla 3)
+- Işık/gölge nedeniyle oluşan ton farklarını ayrı renk sayma
+- JSON dışında hiçbir şey yazma`;
+
+function parseResult(raw: string): Response {
+  const content = raw.replace(/```json\s*/g, "").replace(/```\s*$/g, "").trim();
+  try {
+    const parsed = JSON.parse(content);
+    if (!Array.isArray(parsed.secondaryColors)) parsed.secondaryColors = [];
+    if (!Array.isArray(parsed.secondaryColorNames)) parsed.secondaryColorNames = [];
+    return Response.json(parsed);
+  } catch {
+    return new Response(`Failed to parse: ${content}`, { status: 502 });
+  }
+}
+
+// OpenAI-compatible chat completions call (Lovable gateway + OpenRouter)
+async function callChatApi(
+  url: string,
+  key: string,
+  model: string,
+  imageDataUrl: string,
+): Promise<Response> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Bu kıyafeti analiz et." },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    return new Response(text, { status: res.status });
+  }
+  const data = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+  return parseResult(data.choices?.[0]?.message?.content ?? "{}");
+}
+
 export const Route = createFileRoute("/api/analyze-clothing")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const key = process.env.LOVABLE_API_KEY;
-        if (!key) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
-
         const { imageDataUrl } = (await request.json()) as { imageDataUrl: string };
         if (!imageDataUrl) return new Response("Missing image", { status: 400 });
 
-        const prompt = `Sen bir moda asistanısın. Verilen kıyafet fotoğrafını analiz et ve SADECE şu JSON formatında cevap ver, başka hiçbir şey yazma:
-{
-  "name": "kısa Türkçe isim (örn: Beyaz polo yaka tshirt)",
-  "category": "top veya bottom veya dress veya outerwear veya shoes veya accessory",
-  "primaryColor": "#RRGGBB formatında EN dominant renk hex kodu",
-  "colorName": "Türkçe renk adı (örn: lacivert, krem, beyaz)",
-  "secondaryColors": ["#RRGGBB varsa diğer belirgin renkler, yoksa boş dizi"],
-  "secondaryColorNames": ["Türkçe renk adları, yoksa boş dizi"],
-  "seasons": ["spring ve/veya summer ve/veya fall ve/veya winter"],
-  "style": "casual veya formal veya sport veya elegant",
-  "pattern": "solid veya striped veya checked veya floral veya graphic veya other"
-}
-Sadece JSON döndür, başka metin yazma.`;
-
-        const body = {
-          model: "google/gemini-2.5-flash",
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: prompt },
-                { type: "image_url", image_url: { url: imageDataUrl } },
-              ],
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 500,
-        };
-
-        const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${key}`,
-          },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          return new Response(text, { status: res.status });
+        // Provider 1: Lovable AI gateway (works on Lovable hosting)
+        const lovableKey = process.env.LOVABLE_API_KEY;
+        if (lovableKey) {
+          return callChatApi(
+            "https://ai.gateway.lovable.dev/v1/chat/completions",
+            lovableKey,
+            "google/gemini-2.5-flash",
+            imageDataUrl,
+          );
         }
 
-        const data = await res.json() as {
-          choices?: Array<{ message?: { content?: string } }>;
-        };
-        let content = data.choices?.[0]?.message?.content ?? "{}";
-        content = content.replace(/```json\s*/g, "").replace(/```\s*$/g, "").trim();
-
-        try {
-          const parsed = JSON.parse(content);
-          if (!Array.isArray(parsed.secondaryColors)) parsed.secondaryColors = [];
-          if (!Array.isArray(parsed.secondaryColorNames)) parsed.secondaryColorNames = [];
-          if (!parsed.subCategory) parsed.subCategory = "diger";
-          return Response.json(parsed);
-        } catch {
-          return new Response(`Failed to parse: ${content}`, { status: 502 });
+        // Provider 2: OpenRouter (works on Vercel, free tier)
+        const openrouterKey = process.env.OPENROUTER_API_KEY;
+        if (openrouterKey) {
+          return callChatApi(
+            "https://openrouter.ai/api/v1/chat/completions",
+            openrouterKey,
+            "google/gemini-2.0-flash-exp:free",
+            imageDataUrl,
+          );
         }
+
+        return new Response(
+          "No AI provider configured (LOVABLE_API_KEY or OPENROUTER_API_KEY required)",
+          { status: 500 },
+        );
       },
     },
   },
