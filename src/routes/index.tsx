@@ -457,7 +457,8 @@ function Home() {
                   </Card>
                 ))}
               </div>
-            )}
+              );
+            })()}
           </TabsContent>
         </Tabs>
       </main>
