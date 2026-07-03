@@ -216,15 +216,18 @@ function Home() {
           const res = await analyzeOne(small);
           if (!res.ok) { fail++; toast.error(`${file.name}: ${(await res.text()).slice(0, 100)}`); await new Promise((r) => setTimeout(r, 800)); continue; }
           const data = await res.json();
-          const item: ClothingItem = {
-            id: crypto.randomUUID(), name: data.name ?? "Kıyafet", category: data.category ?? "top",
-            primaryColor: data.primaryColor ?? "#888888", colorName: data.colorName ?? "renk",
-            secondaryColors: data.secondaryColors ?? [], secondaryColorNames: data.secondaryColorNames ?? [],
+          const next = await addItem({
+            name: data.name ?? "Kıyafet",
+            category: data.category ?? "top",
+            primaryColor: data.primaryColor ?? "#888888",
+            colorName: data.colorName ?? "renk",
+            secondaryColors: data.secondaryColors ?? [],
+            secondaryColorNames: data.secondaryColorNames ?? [],
             pattern: data.pattern ?? "solid",
             seasons: data.seasons?.length ? data.seasons : ["spring", "summer", "fall", "winter"],
-            style: data.style ?? "casual", imageDataUrl: small, createdAt: Date.now(),
-          };
-          const next = await addItem(item);
+            style: data.style ?? "casual",
+            imageDataUrl: small,
+          });
           setItems(next); ok++;
           if (i < arr.length - 1) await new Promise((r) => setTimeout(r, 350));
         } catch (e) { fail++; toast.error(`${file.name}: ${(e as Error).message}`); }
