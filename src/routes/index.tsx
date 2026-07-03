@@ -337,6 +337,9 @@ function Home() {
     if (!result.length) toast.error("Bu kriterlere uygun kombin bulunamadı.");
   }
 
+  if (!sessionReady) return <div className="min-h-screen grid place-items-center bg-background"><Loader2 className="size-6 animate-spin text-muted-foreground" /></div>;
+  if (!session) return <AuthScreen />;
+
   return (
     <div className="min-h-screen bg-background">
       <Toaster richColors position="top-center" />
@@ -347,12 +350,17 @@ function Home() {
           <div className="size-9 rounded-xl bg-primary text-primary-foreground grid place-items-center">
             <Shirt className="size-5" />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold leading-tight">Dolabım</h1>
-            <p className="text-xs text-muted-foreground">AI destekli kombin asistanı</p>
+            <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
           </div>
+          <Button variant="ghost" size="sm" onClick={handleMigrate} disabled={migrating} title="Eski verileri buluta taşı">
+            {migrating ? <Loader2 className="size-4 animate-spin" /> : "Taşı"}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => supabase.auth.signOut()} title="Çıkış"><LogOut className="size-4" /></Button>
         </div>
       </header>
+
 
 
       <main className="mx-auto max-w-5xl px-4 py-6">
