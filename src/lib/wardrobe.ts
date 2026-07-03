@@ -1,4 +1,5 @@
-import { get, set } from "idb-keyval";
+import { get as idbGet, del as idbDel } from "idb-keyval";
+import { supabase } from "@/integrations/supabase/client";
 
 export type Category = "top" | "bottom" | "dress" | "outerwear" | "shoes" | "accessory";
 export type Season = "spring" | "summer" | "fall" | "winter";
@@ -17,7 +18,8 @@ export interface ClothingItem {
   pattern: Pattern;
   seasons: Season[];
   style: Style;
-  imageDataUrl: string;
+  imageDataUrl: string; // display URL (signed) — kept name for compatibility
+  imagePath: string;    // storage object path
   createdAt: number;
 }
 
@@ -27,73 +29,157 @@ export interface Outfit {
   reason: string;
 }
 
-const KEY = "wardrobe.items.v2";
-let cache: ClothingItem[] | null = null;
+const BUCKET = "wardrobe";
+const IDB_KEY = "wardrobe.items.v2";
+let cache: ClothingItem[] = [];
 
-function normalize(raw: Partial<ClothingItem> & { id: string; imageDataUrl: string }): ClothingItem {
+function normalize(row: any, signedUrl: string): ClothingItem {
   return {
-    id: raw.id,
-    name: raw.name ?? "Kıyafet",
-    category: (raw.category as Category) ?? "top",
-    primaryColor: raw.primaryColor ?? "#888888",
-    colorName: raw.colorName ?? "renk",
-    secondaryColors: raw.secondaryColors ?? [],
-    secondaryColorNames: raw.secondaryColorNames ?? [],
-    pattern: (raw.pattern as Pattern) ?? "solid",
-    seasons: raw.seasons ?? ["spring", "summer", "fall", "winter"],
-    style: (raw.style as Style) ?? "casual",
-    imageDataUrl: raw.imageDataUrl,
-    createdAt: raw.createdAt ?? Date.now(),
+    id: row.id,
+    name: row.name ?? "Kıyafet",
+    category: (row.category as Category) ?? "top",
+    primaryColor: row.primary_color ?? "#888888",
+    colorName: row.color_name ?? "renk",
+    secondaryColors: row.secondary_colors ?? [],
+    secondaryColorNames: row.secondary_color_names ?? [],
+    pattern: (row.pattern as Pattern) ?? "solid",
+    seasons: row.seasons ?? ["spring", "summer", "fall", "winter"],
+    style: (row.style as Style) ?? "casual",
+    imagePath: row.image_path,
+    imageDataUrl: signedUrl,
+    createdAt: new Date(row.created_at).getTime(),
   };
 }
 
-export function loadItems(): ClothingItem[] {
-  return cache ?? [];
+async function signPaths(paths: string[]): Promise<Record<string, string>> {
+  if (paths.length === 0) return {};
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 60 * 60 * 6);
+  if (error) throw error;
+  const map: Record<string, string> = {};
+  for (const d of data ?? []) if (d.path && d.signedUrl) map[d.path] = d.signedUrl;
+  return map;
 }
 
-export async function loadItemsAsync(): Promise<ClothingItem[]> {
-  if (cache !== null) return cache;
-  try {
-    const stored = (await get<ClothingItem[]>(KEY)) ?? [];
-    cache = stored.map((i) => normalize(i));
-  } catch {
-    cache = [];
-  }
-  // localStorage fallback migration
-  if (cache.length === 0 && typeof window !== "undefined") {
-    try {
-      const legacy = window.localStorage.getItem(KEY) ?? window.localStorage.getItem("wardrobe.items.v1");
-      if (legacy) {
-        const parsed = JSON.parse(legacy) as ClothingItem[];
-        cache = parsed.map((i) => normalize(i));
-        await set(KEY, cache);
-      }
-    } catch { /* ignore */ }
-  }
+export function loadItems(): ClothingItem[] {
   return cache;
 }
 
-async function persist() {
-  if (cache) await set(KEY, cache);
+export async function loadItemsAsync(): Promise<ClothingItem[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { cache = []; return cache; }
+  const { data, error } = await supabase.from("clothing_items").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  const urls = await signPaths((data ?? []).map((r) => r.image_path));
+  cache = (data ?? []).map((r) => normalize(r, urls[r.image_path] ?? ""));
+  return cache;
 }
 
-export async function addItem(item: ClothingItem): Promise<ClothingItem[]> {
-  cache = [normalize(item), ...(cache ?? [])];
-  await persist();
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [meta, b64] = dataUrl.split(",");
+  const mime = /data:(.*?);/.exec(meta)?.[1] ?? "image/jpeg";
+  const bin = atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Blob([u8], { type: mime });
+}
+
+export interface NewItemInput {
+  name: string;
+  category: Category;
+  primaryColor: string;
+  colorName: string;
+  secondaryColors: string[];
+  secondaryColorNames: string[];
+  pattern: Pattern;
+  seasons: Season[];
+  style: Style;
+  imageDataUrl: string; // downscaled jpeg data url
+}
+
+export async function addItem(input: NewItemInput): Promise<ClothingItem[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Giriş yapılmadı");
+  const blob = dataUrlToBlob(input.imageDataUrl);
+  const path = `${user.id}/${crypto.randomUUID()}.jpg`;
+  const up = await supabase.storage.from(BUCKET).upload(path, blob, { contentType: blob.type, upsert: false });
+  if (up.error) throw up.error;
+  const { data, error } = await supabase.from("clothing_items").insert({
+    user_id: user.id,
+    name: input.name,
+    category: input.category,
+    primary_color: input.primaryColor,
+    color_name: input.colorName,
+    secondary_colors: input.secondaryColors,
+    secondary_color_names: input.secondaryColorNames,
+    pattern: input.pattern,
+    seasons: input.seasons,
+    style: input.style,
+    image_path: path,
+  }).select("*").single();
+  if (error) throw error;
+  const urls = await signPaths([path]);
+  cache = [normalize(data, urls[path] ?? ""), ...cache];
   return cache;
 }
 
 export async function removeItem(id: string): Promise<ClothingItem[]> {
-  cache = (cache ?? []).filter((i) => i.id !== id);
-  await persist();
+  const item = cache.find((i) => i.id === id);
+  const { error } = await supabase.from("clothing_items").delete().eq("id", id);
+  if (error) throw error;
+  if (item?.imagePath) await supabase.storage.from(BUCKET).remove([item.imagePath]);
+  cache = cache.filter((i) => i.id !== id);
   return cache;
 }
 
 export async function updateItem(updated: ClothingItem): Promise<ClothingItem[]> {
-  cache = (cache ?? []).map((i) => (i.id === updated.id ? normalize(updated) : i));
-  await persist();
+  const { error } = await supabase.from("clothing_items").update({
+    name: updated.name,
+    category: updated.category,
+    primary_color: updated.primaryColor,
+    color_name: updated.colorName,
+    secondary_colors: updated.secondaryColors,
+    secondary_color_names: updated.secondaryColorNames,
+    pattern: updated.pattern,
+    seasons: updated.seasons,
+    style: updated.style,
+  }).eq("id", updated.id);
+  if (error) throw error;
+  cache = cache.map((i) => (i.id === updated.id ? { ...updated } : i));
   return cache;
 }
+
+/** Migrate legacy IDB items into Cloud (one-shot). Returns count migrated. */
+export async function migrateLegacyItems(onProgress?: (done: number, total: number) => void): Promise<number> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+  let legacy: any[] = [];
+  try { legacy = (await idbGet<any[]>(IDB_KEY)) ?? []; } catch { legacy = []; }
+  if (!legacy.length) return 0;
+  let ok = 0;
+  for (let i = 0; i < legacy.length; i++) {
+    const it = legacy[i];
+    try {
+      await addItem({
+        name: it.name ?? "Kıyafet",
+        category: (it.category as Category) ?? "top",
+        primaryColor: it.primaryColor ?? "#888888",
+        colorName: it.colorName ?? "renk",
+        secondaryColors: it.secondaryColors ?? [],
+        secondaryColorNames: it.secondaryColorNames ?? [],
+        pattern: (it.pattern as Pattern) ?? "solid",
+        seasons: it.seasons ?? ["spring", "summer", "fall", "winter"],
+        style: (it.style as Style) ?? "casual",
+        imageDataUrl: it.imageDataUrl,
+      });
+      ok++;
+    } catch { /* skip */ }
+    onProgress?.(i + 1, legacy.length);
+  }
+  try { await idbDel(IDB_KEY); } catch { /* ignore */ }
+  return ok;
+}
+
+/* ---------- outfit generation (unchanged) ---------- */
 
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const m = hex.replace("#", "");
