@@ -11,12 +11,15 @@ import { Toaster } from "@/components/ui/sonner";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  addItem, currentSeason, generateOutfitsFor, labelCategory, labelMode,
+  addItem, currentSeason, generateOutfitsFor, labelCategory,
   labelPattern, labelSeason, labelStyle, loadItems, loadItemsAsync,
-  removeItem, updateItem,
+  removeItem, updateItem, migrateLegacyItems,
   type Category, type ClothingItem, type ColorMode, type Outfit,
   type Pattern, type Season, type Style,
 } from "@/lib/wardrobe";
+import { supabase } from "@/integrations/supabase/client";
+import type { Session } from "@supabase/supabase-js";
+import { LogOut } from "lucide-react";
 
 
 export const Route = createFileRoute("/")({
