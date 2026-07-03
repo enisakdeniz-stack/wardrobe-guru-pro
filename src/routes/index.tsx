@@ -270,13 +270,6 @@ function Home() {
     }
     return res;
   }
-    const res = await fetch("/api/analyze-clothing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: small }) });
-    if ((res.status === 429 || res.status === 503) && attempt < 4) {
-      await new Promise((r) => setTimeout(r, 1500 * Math.pow(2, attempt)));
-      return analyzeOne(small, attempt + 1);
-    }
-    return res;
-  }
 
   async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
