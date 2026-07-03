@@ -14,7 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clothing_items: {
+        Row: {
+          category: string
+          color_name: string
+          created_at: string
+          id: string
+          image_path: string
+          name: string
+          pattern: string
+          primary_color: string
+          seasons: Json
+          secondary_color_names: Json
+          secondary_colors: Json
+          style: string
+          user_id: string
+        }
+        Insert: {
+          category?: string
+          color_name?: string
+          created_at?: string
+          id?: string
+          image_path: string
+          name?: string
+          pattern?: string
+          primary_color?: string
+          seasons?: Json
+          secondary_color_names?: Json
+          secondary_colors?: Json
+          style?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          color_name?: string
+          created_at?: string
+          id?: string
+          image_path?: string
+          name?: string
+          pattern?: string
+          primary_color?: string
+          seasons?: Json
+          secondary_color_names?: Json
+          secondary_colors?: Json
+          style?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
