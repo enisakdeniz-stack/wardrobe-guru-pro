@@ -173,7 +173,60 @@ function EditModal({ item, onSave, onClose }: { item: ClothingItem; onSave: (u: 
   );
 }
 
+function AuthScreen() {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (!email || password.length < 6) { toast.error("Email ve en az 6 karakterli şifre gir"); return; }
+    setBusy(true);
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
+        if (error) throw error;
+        toast.success("Hesap oluşturuldu — giriş yapılıyor");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="min-h-screen grid place-items-center bg-background p-4">
+      <Toaster richColors position="top-center" />
+      <Card className="w-full max-w-sm">
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="size-9 rounded-xl bg-primary text-primary-foreground grid place-items-center"><Shirt className="size-5" /></div>
+            <div>
+              <h1 className="text-lg font-semibold leading-tight">Dolabım</h1>
+              <p className="text-xs text-muted-foreground">{mode === "signin" ? "Giriş yap" : "Hesap oluştur"}</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input type="password" placeholder="Şifre (min 6)" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          <Button className="w-full" onClick={submit} disabled={busy}>
+            {busy ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
+            {mode === "signin" ? "Giriş yap" : "Kayıt ol"}
+          </Button>
+          <button className="text-xs text-muted-foreground hover:text-foreground w-full text-center" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
+            {mode === "signin" ? "Hesabın yok mu? Kayıt ol" : "Hesabın var mı? Giriş yap"}
+          </button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function Home() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
   const [items, setItems] = useState<ClothingItem[]>([]);
   const [analyzing, setAnalyzing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -185,13 +238,38 @@ function Home() {
   const [seedId, setSeedId] = useState<string | null>(null);
   const [tab, setTab] = useState<"outfits" | "wardrobe">("wardrobe");
   const [catFilter, setCatFilter] = useState<Category | "all">("all");
+  const [migrating, setMigrating] = useState(false);
 
   useEffect(() => {
-    loadItemsAsync().then(setItems);
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setSessionReady(true); });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!session) { setItems([]); return; }
+    loadItemsAsync().then(setItems).catch((e) => toast.error(e.message));
+  }, [session?.user?.id]);
+
+  async function handleMigrate() {
+    setMigrating(true);
+    const tId = toast.loading("Eski kıyafetler taşınıyor...");
+    try {
+      const n = await migrateLegacyItems((done, total) => toast.loading(`${done}/${total} taşınıyor...`, { id: tId }));
+      toast.success(n > 0 ? `${n} kıyafet taşındı` : "Taşınacak eski kıyafet bulunamadı", { id: tId });
+      setItems(await loadItemsAsync());
+    } catch (e) { toast.error((e as Error).message, { id: tId }); }
+    finally { setMigrating(false); }
+  }
 
   async function analyzeOne(small: string, attempt = 0): Promise<Response> {
+    const res = await fetch("/api/analyze-clothing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: small }) });
+    if ((res.status === 429 || res.status === 503) && attempt < 4) {
+      await new Promise((r) => setTimeout(r, 1500 * Math.pow(2, attempt)));
+      return analyzeOne(small, attempt + 1);
+    }
+    return res;
+  }
     const res = await fetch("/api/analyze-clothing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageDataUrl: small }) });
     if ((res.status === 429 || res.status === 503) && attempt < 4) {
       await new Promise((r) => setTimeout(r, 1500 * Math.pow(2, attempt)));
