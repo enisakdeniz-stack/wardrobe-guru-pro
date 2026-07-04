@@ -148,12 +148,39 @@ export async function updateItem(updated: ClothingItem): Promise<ClothingItem[]>
   return cache;
 }
 
-/** Migrate legacy IDB items into Cloud (one-shot). Returns count migrated. */
+/** Migrate legacy items from IDB (v2) and localStorage (v1) into Cloud. Returns count migrated. */
 export async function migrateLegacyItems(onProgress?: (done: number, total: number) => void): Promise<number> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
-  let legacy: any[] = [];
-  try { legacy = (await idbGet<any[]>(IDB_KEY)) ?? []; } catch { legacy = []; }
+
+  const legacy: any[] = [];
+  const seen = new Set<string>();
+  const push = (arr: any[]) => {
+    for (const it of arr ?? []) {
+      if (!it || !it.imageDataUrl) continue;
+      const key = it.id ?? it.imageDataUrl.slice(0, 128);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      legacy.push(it);
+    }
+  };
+
+  // IDB v2
+  try { push((await idbGet<any[]>(IDB_KEY)) ?? []); } catch { /* ignore */ }
+  // IDB legacy keys
+  for (const k of ["wardrobe.items.v1", "wardrobe.items", "wardrobe"]) {
+    try { push((await idbGet<any[]>(k)) ?? []); } catch { /* ignore */ }
+  }
+  // localStorage v1
+  if (typeof window !== "undefined") {
+    for (const k of ["wardrobe.items.v1", "wardrobe.items", "wardrobe"]) {
+      try {
+        const raw = window.localStorage.getItem(k);
+        if (raw) push(JSON.parse(raw));
+      } catch { /* ignore */ }
+    }
+  }
+
   if (!legacy.length) return 0;
   let ok = 0;
   for (let i = 0; i < legacy.length; i++) {
@@ -176,8 +203,14 @@ export async function migrateLegacyItems(onProgress?: (done: number, total: numb
     onProgress?.(i + 1, legacy.length);
   }
   try { await idbDel(IDB_KEY); } catch { /* ignore */ }
+  if (typeof window !== "undefined") {
+    for (const k of ["wardrobe.items.v1", "wardrobe.items", "wardrobe"]) {
+      try { window.localStorage.removeItem(k); } catch { /* ignore */ }
+    }
+  }
   return ok;
 }
+
 
 /* ---------- outfit generation (unchanged) ---------- */
 
