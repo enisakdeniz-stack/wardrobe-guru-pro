@@ -77,14 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Dolabım — AI Kombin Asistanı" },
+      { name: "description", content: "Dolabındaki kıyafetleri ekle, AI mevsime ve renk uyumuna göre kombin önersin." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Dolabım — AI Kombin Asistanı" },
+      { property: "og:description", content: "Dolabındaki kıyafetleri ekle, AI mevsime ve renk uyumuna göre kombin önersin." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Dolabım — AI Kombin Asistanı" },
+      { name: "twitter:description", content: "Dolabındaki kıyafetleri ekle, AI mevsime ve renk uyumuna göre kombin önersin." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/dae2a944-889c-4dc1-b92c-bc44559aa205/id-preview-000534fe--5acc2057-b452-40ee-9a01-116af48d3cc5.lovable.app-1783175990908.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/dae2a944-889c-4dc1-b92c-bc44559aa205/id-preview-000534fe--5acc2057-b452-40ee-9a01-116af48d3cc5.lovable.app-1783175990908.png" },
     ],
     links: [
       {
