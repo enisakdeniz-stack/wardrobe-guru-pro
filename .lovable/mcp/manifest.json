@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "sdk_version": "0.22.2",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://ukyklplzawpfxkuawjlx.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "dolabim-mcp",
+      "version": "0.1.0",
+      "title": "Dolabım MCP"
+    },
+    "tools": [
+      {
+        "name": "list_clothes",
+        "title": "Kıyafetlerimi listele",
+        "description": "Kullanıcının dolabındaki tüm kıyafetleri döndürür (kategori, renk, mevsim, stil, desen).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "category": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "dress",
+                "outerwear",
+                "shoes",
+                "accessory"
+              ],
+              "description": "Filtrelemek için kategori (opsiyonel)."
+            },
+            "season": {
+              "type": "string",
+              "enum": [
+                "spring",
+                "summer",
+                "fall",
+                "winter"
+              ],
+              "description": "Filtrelemek için mevsim (opsiyonel)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "wardrobe_stats",
+        "title": "Dolap istatistikleri",
+        "description": "Kullanıcının dolabındaki kıyafetlerin kategori, mevsim ve stil dağılımını özetler.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
